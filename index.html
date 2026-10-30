@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0a12">
+    <meta name="description" content="Swipe through games made with Claude, Gemini and Kimi, and play them right in the feed.">
+    <title>Pukytoon</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="css/pukytoon.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="feed-bar">
+            <div class="logo">puky<span>toon</span></div>
+            <button id="btn-add" class="icon-btn" type="button" aria-label="Add a game">+</button>
+        </div>
+        <div class="play-bar">
+            <button id="btn-back" class="icon-btn" type="button" aria-label="Back to the feed">‹</button>
+            <div id="play-title" class="play-title"></div>
+            <button id="btn-restart" class="icon-btn" type="button" aria-label="Restart the game">↻</button>
+        </div>
+    </header>
+
+    <main id="feed" class="feed" aria-label="Games"></main>
+
+    <div id="sheet" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close></div>
+        <form id="add-form" class="sheet-card" autocomplete="off">
+            <div class="grab" data-close></div>
+            <h2>Add a game</h2>
+            <p class="hint">Drop the game's share link (best), or paste its code.</p>
+            <textarea id="drop" rows="5" spellcheck="false"
+                placeholder="https://claude.ai/public/artifacts/…&#10;https://gemini.google.com/share/…&#10;&#10;…or paste the code: <html>… / export default function Game() {…}"></textarea>
+            <div id="detect" class="detect" aria-live="polite"></div>
+            <div id="made-with" class="made-with" hidden>
+                <span>Made with</span>
+                <label><input type="radio" name="source" value="claude"><span>Claude</span></label>
+                <label><input type="radio" name="source" value="gemini"><span>Gemini</span></label>
+                <label><input type="radio" name="source" value="kimi"><span>Kimi</span></label>
+                <label><input type="radio" name="source" value="other" checked><span>Other</span></label>
+            </div>
+            <input id="name" class="name" type="text" maxlength="60" placeholder="Name (optional)">
+            <div class="sheet-actions">
+                <label class="file-btn">Open a file<input id="file" type="file" accept=".html,.htm,.jsx,.tsx,.js,.txt,text/html,text/plain" hidden></label>
+                <button id="btn-save" class="primary" type="submit" disabled>Add to feed</button>
+            </div>
+            <details class="how">
+                <summary>Where do I find the link?</summary>
+                <p><b>Claude:</b> open the artifact, tap <i>Publish</i>, then <i>Copy link</i>.</p>
+                <p><b>Gemini:</b> open the Canvas, tap <i>Share</i>, then <i>Copy link</i>.</p>
+                <p><b>Kimi:</b> open the page it made, tap <i>Share</i>, then copy the link.</p>
+                <p>These open full screen when you tap Play. Want the game to play right inside the feed? Copy its code instead
+                   (the <i>Copy</i> button on the code) and paste that here.</p>
+            </details>
+        </form>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

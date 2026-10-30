@@ -1,0 +1,11 @@
+# The Android app: installed packages, the copied site and build output.
+app/node_modules/
+app/www/
+app/android/app/build/
+app/android/build/
+app/android/.gradle/
+app/android/local.properties
+# Release signing keys and their passwords never go in the repo (app/android/app/debug.keystore is the
+# shared test-build key and is meant to be here).
+*.jks
+keystore.properties

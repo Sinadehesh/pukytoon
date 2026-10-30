@@ -1,0 +1,8 @@
+{
+  "appId": "com.sinadehesh.pukytoon",
+  "appName": "Pukytoon",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b0a12"
+  }
+}

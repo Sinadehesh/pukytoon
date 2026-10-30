@@ -1,0 +1,208 @@
+/* Pukytoon: a full-screen feed of games you swipe through like videos. */
+
+:root {
+    --bar: calc(52px + env(safe-area-inset-top));
+    --bg: #0b0a12;
+    --panel: #17151f;
+    --line: rgba(255, 255, 255, 0.12);
+    --fg: #ffffff;
+    --muted: rgba(255, 255, 255, 0.72);
+    --pink: #ff5fa2;
+    --violet: #7b5cff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+}
+body { overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* --- Top bar: logo and + in the feed; back, title and restart while playing --- */
+
+.topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    height: var(--bar); padding-top: env(safe-area-inset-top);
+    background: var(--bg);
+}
+.feed-bar, .play-bar {
+    height: 52px; padding: 0 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.play-bar { display: none; }
+body.playing .feed-bar { display: none; }
+body.playing .play-bar { display: flex; }
+.logo { font-weight: 900; font-size: 23px; letter-spacing: -0.5px; }
+.logo span {
+    background: linear-gradient(90deg, var(--pink), var(--violet));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.play-title {
+    flex: 1; text-align: center; font-weight: 700; font-size: 16px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.icon-btn {
+    width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1); font-size: 24px; line-height: 1;
+    display: grid; place-items: center;
+}
+
+/* --- The feed: one game per screen, snapping like a video feed --- */
+
+.feed {
+    position: fixed; inset: 0;
+    overflow-y: auto; scroll-snap-type: y mandatory;
+    overscroll-behavior: contain; scrollbar-width: none;
+}
+.feed::-webkit-scrollbar { display: none; }
+body.playing .feed { overflow: hidden; }
+
+.slide {
+    position: relative; height: 100%; overflow: hidden;
+    scroll-snap-align: start; scroll-snap-stop: always;
+}
+/* The game always sits under the top bar, so it never resizes between the feed and playing */
+.stage {
+    position: absolute; top: var(--bar); left: 0; right: 0; bottom: 0;
+    background: #000;
+}
+.stage iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* The cover lets you swipe past a game; tapping it starts playing */
+.cover {
+    position: absolute; top: var(--bar); left: 0; right: 0; bottom: 0;
+    border: 0; padding: 0; margin: 0;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.78));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+}
+.play-btn {
+    padding: 14px 30px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96); color: #111;
+    font-weight: 800; font-size: 18px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.play-note { font-size: 13px; color: var(--muted); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+body.playing .slide.active .cover,
+body.playing .caption,
+body.playing .rail { display: none; }
+
+.caption {
+    position: absolute; left: 16px; right: 84px; bottom: calc(22px + env(safe-area-inset-bottom));
+    pointer-events: none; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.caption h2 { margin: 8px 0 4px; font-size: 21px; line-height: 1.2; }
+.caption p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.35; }
+.chip {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; text-shadow: none;
+    background: linear-gradient(90deg, var(--c1), var(--c2));
+}
+
+.rail {
+    position: absolute; right: 10px; bottom: calc(26px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.rail button {
+    width: 48px; height: 48px; border: 0; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45); font-size: 22px; line-height: 1;
+    display: grid; place-items: center;
+}
+.rail button.liked { color: #ff3b6b; }
+
+.swipe-hint {
+    position: absolute; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    pointer-events: none; font-size: 13px; font-weight: 600; color: var(--muted);
+    animation: nudge 1.6s ease-in-out infinite;
+}
+@keyframes nudge { 50% { transform: translate(-50%, -8px); } }
+body.playing .swipe-hint { display: none; }
+
+/* Link games that can't play inside the feed get a poster instead */
+.poster {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: radial-gradient(circle at 30% 20%, var(--c2), var(--c1) 55%, var(--bg));
+}
+.poster-emoji { font-size: 104px; line-height: 1; filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35)); margin-bottom: 190px; }
+.poster-host { position: absolute; top: 18px; font-size: 13px; color: rgba(255, 255, 255, 0.85); }
+
+/* The last screen of the feed */
+.add-slide .stage {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    padding: 24px; text-align: center;
+    background: radial-gradient(circle at 50% 35%, rgba(123, 92, 255, 0.35), var(--bg) 65%);
+}
+.add-slide h2 { margin: 18px 0 4px; font-size: 24px; }
+.add-slide p { margin: 0; max-width: 320px; color: var(--muted); line-height: 1.45; }
+.big-add {
+    width: 96px; height: 96px; border: 0; border-radius: 30px;
+    background: linear-gradient(135deg, var(--pink), var(--violet));
+    font-size: 52px; font-weight: 300; line-height: 1;
+    box-shadow: 0 16px 40px rgba(123, 92, 255, 0.45);
+}
+
+/* --- Add-a-game sheet --- */
+
+.sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet[hidden] { display: none; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); }
+.sheet-card {
+    position: relative; width: 100%; max-width: 560px; max-height: 94%; overflow-y: auto;
+    background: var(--panel); border-radius: 22px 22px 0 0;
+    padding: 8px 16px calc(18px + env(safe-area-inset-bottom));
+    animation: rise 0.22s ease-out;
+}
+@keyframes rise { from { transform: translateY(40px); opacity: 0; } }
+.grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 12px; }
+.sheet-card h2 { margin: 0 0 4px; font-size: 20px; }
+.hint { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.sheet-card textarea, .sheet-card .name {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px;
+    background: #0f0e16; color: var(--fg); padding: 12px;
+    font: 14px/1.45 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.sheet-card textarea { min-height: 120px; max-height: 40vh; resize: vertical; }
+.sheet-card .name { font-family: inherit; font-size: 15px; margin-top: 10px; }
+.sheet-card textarea:focus, .sheet-card .name:focus { outline: 2px solid var(--violet); outline-offset: 0; }
+.detect { min-height: 20px; margin-top: 8px; font-size: 13px; font-weight: 600; color: #a7f3d0; }
+.made-with { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.made-with[hidden] { display: none; }
+.made-with label input { position: absolute; opacity: 0; pointer-events: none; }
+.made-with label span {
+    display: inline-block; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--fg); cursor: pointer;
+}
+.made-with label input:checked + span { background: var(--violet); border-color: var(--violet); }
+.made-with label input:focus-visible + span { outline: 2px solid var(--pink); }
+.sheet-actions { display: flex; gap: 10px; margin-top: 14px; }
+.file-btn, .primary {
+    flex: 1; min-height: 48px; border-radius: 14px; border: 0;
+    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+}
+.file-btn { background: rgba(255, 255, 255, 0.08); cursor: pointer; }
+.primary { flex: 1.4; background: linear-gradient(90deg, var(--pink), var(--violet)); }
+.primary:disabled { opacity: 0.4; cursor: default; }
+.how { margin-top: 14px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.how summary { cursor: pointer; font-weight: 600; color: var(--fg); }
+.how p { margin: 8px 0 0; }
+
+.toast {
+    position: fixed; left: 50%; top: calc(var(--bar) + 12px); z-index: 60;
+    transform: translate(-50%, -20px); opacity: 0; pointer-events: none;
+    background: rgba(255, 255, 255, 0.95); color: #111;
+    padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    transition: opacity 0.2s, transform 0.2s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+    .swipe-hint, .sheet-card { animation: none; }
+    .toast { transition: none; }
+}

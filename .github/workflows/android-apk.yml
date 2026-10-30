@@ -1,0 +1,68 @@
+name: Build Android app
+
+# Builds the test version of the app on every push and puts it on the Releases page as
+# "Pukytoon test build", so you can download Pukytoon.apk straight onto your phone and install it.
+# Every build is signed with the same test key (app/android/app/debug.keystore), so a new APK installs
+# over the old one and keeps the games you added.
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write # for the release
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Android SDK 36
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      - name: Version
+        run: |
+          sed -i -E "s/versionCode [0-9]+/versionCode $CODE/; s/versionName \"[^\"]*\"/versionName \"1.0.$CODE\"/" app/android/app/build.gradle
+          grep -E "versionCode|versionName" app/android/app/build.gradle
+
+      - name: Build the APK
+        working-directory: app
+        run: npm run apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pukytoon-apk-${{ github.run_number }}
+          path: app/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Put it on the Releases page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/android/app/build/outputs/apk/debug/app-debug.apk Pukytoon.apk
+          gh release delete test-build --yes --cleanup-tag || true
+          gh release create test-build Pukytoon.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Pukytoon test build 1.0.$CODE" \
+            --notes "Built from $GITHUB_REF_NAME ($GITHUB_SHA). On your Android phone, download Pukytoon.apk and open it to install (allow installing apps from your browser when asked)."

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Happy Animal Merge</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* The board keeps its 450x640 shape and fits under the HUD (about 70px tall with its margin) */
+        .hud, .game-board { width: min(100% - 16px, 450px, calc((100vh - 70px) * 450 / 640)); }
+        .hud {
+            background: #34495e; padding: 8px 12px;
+            border-radius: 8px 8px 0 0; box-sizing: border-box; font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 16px;
+        }
+        #btn-size {
+            padding: 4px 10px; border-radius: 14px; background: #1a252f; color: white;
+            text-decoration: none; font-size: 13px; opacity: 0.7;
+        }
+        #btn-size.active { opacity: 1; background: #8e44ad; }
+        #next-img { width: 30px; height: 30px; vertical-align: middle; }
+        .game-board {
+            position: relative;
+            aspect-ratio: 450/640;
+            border: 6px solid #34495e;
+            box-sizing: border-box;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 4px;
+        }
+        /* Fail line: DANGER_Y / GAME_HEIGHT = 150 / 640 */
+        .danger-line {
+            position: absolute; top: 23.4375%; width: 100%;
+            border-top: 3px dashed rgba(231, 76, 60, 0.8); pointer-events: none; z-index: 10;
+        }
+        #drop-guide {
+            position: absolute; top: 0; left: 50%; aspect-ratio: 1;
+            transform: translateX(-50%);
+            background: center/contain no-repeat;
+            opacity: 0.6; pointer-events: none; z-index: 11;
+        }
+        #gameover {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none;
+            flex-direction: column; justify-content: center; align-items: center; z-index: 200;
+            text-align: center;
+        }
+        #gameover button {
+            margin-top: 12px; background: #27ae60; color: white; border: none; padding: 12px 24px;
+            border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer;
+        }
+    </style>
+    <script src="vendor/matter.min.js"></script>
+</head>
+<body>
+    <div class="hud">
+        <div>⭐ <span id="score-val">0</span></div>
+        <div style="color: #f39c12;">🏆 <span id="best-val">0</span></div>
+        <div>Next <img id="next-img" alt=""></div>
+        <a id="btn-size" href="?size=reverse" title="Reverse size: higher levels are smaller">↕️ Reverse</a>
+    </div>
+
+    <div id="board" class="game-board">
+        <div id="drop-guide"></div>
+        <div class="danger-line"></div>
+    </div>
+
+    <div id="gameover">
+        <h2 style="margin: 0;">Game Over</h2>
+        <div id="gameover-text"></div>
+        <button id="btn-restart">Play Again</button>
+    </div>
+
+    <script src="shapes.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

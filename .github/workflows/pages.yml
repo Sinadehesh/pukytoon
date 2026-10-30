@@ -1,0 +1,54 @@
+name: Publish the website
+
+# Puts the feed on GitHub Pages, so it also plays in a phone's browser.
+# Turn it on once: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+# Until then this workflow only leaves a note and skips the deploy.
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Is GitHub Pages on?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" --silent 2>/dev/null; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::GitHub Pages is off. Turn it on in Settings -> Pages (Source: GitHub Actions) to publish the website."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.pages.outputs.on == 'true'
+
+      - name: Site files
+        if: steps.pages.outputs.on == 'true'
+        run: mkdir _site && cp -r index.html manifest.webmanifest css js games icons _site/
+
+      - uses: actions/configure-pages@v5
+        if: steps.pages.outputs.on == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.on == 'true'
+
+      - id: deployment
+        if: steps.pages.outputs.on == 'true'
+        uses: actions/deploy-pages@v4

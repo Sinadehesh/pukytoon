@@ -8,8 +8,13 @@ Games made with Claude, Gemini or Kimi, in a feed you swipe through like videos.
 - **Tap +** (or swipe to the end of the feed) to add a game: drop its **share link** or paste its **code**.
   Pukytoon works out which one it is, and what kind of code.
 
-The first game in the feed is **Happy Animal Merge** (Egg → Chick → … → Unicorn), the Animals mode of
-[Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge) with its sprites and hitboxes.
+The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge):
+
+- **Happy Animal Merge** (Egg → Chick → … → Unicorn), its Animals mode with its sprites and hitboxes, built into
+  the app (works offline).
+- **Zombie Bomber** (merge bombs, drop them on the zombies, 300 levels), loaded live from
+  [its GitHub Pages address](https://sinadehesh.github.io/Happy-Fruit-merge/bomber/), so whatever you push to
+  Happy-Fruit-merge shows up in Pukytoon without a new app build. It needs the internet.
 
 ## Adding your games
 
@@ -83,7 +88,8 @@ app/                           the Android app (Capacitor 8): build-web.mjs, and
 - On Android, link games open in the in-app browser (`@capacitor/browser`) and the back button is handled by
   `@capacitor/app`. `MainActivity` keeps game frames inside the feed (Capacitor would otherwise send any
   non-app page to the phone's browser).
-- To add another built-in game, put it in `games/<name>/` and add it to `BUILTIN` at the top of `js/app.js`.
+- To add another built-in game, add it to `BUILTIN` at the top of `js/app.js`, with `src` set to its page in
+  `games/<name>/` (part of the app, works offline) or to the address where it's published (loads live).
 
 Code games need the internet the first time they load their libraries (React, Tailwind, packages);
 Happy Animal Merge works offline.

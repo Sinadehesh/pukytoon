@@ -3,7 +3,8 @@
 import { SOURCES, FORMAT_NAMES, detectInput, guessTitle, buildDocument } from './runtime.js';
 import * as store from './store.js';
 
-// Games that come with the app, always at the top of the feed
+// Games that come with the app, always at the top of the feed. `src` is a page in games/, or a live
+// address for a game that's published elsewhere (it then needs the internet, and updates by itself).
 const BUILTIN = [{
     id: 'happy-animal-merge',
     kind: 'builtin',
@@ -11,6 +12,13 @@ const BUILTIN = [{
     title: 'Happy Animal Merge',
     blurb: 'Drop two of the same animal to merge them. Egg → Chick → … → Unicorn!',
     src: 'games/happy-animal-merge/index.html'
+}, {
+    id: 'zombie-bomber',
+    kind: 'builtin',
+    source: 'pukytoon',
+    title: 'Zombie Bomber',
+    blurb: 'Merge bigger bombs, then drop them on the zombies before they reach your base. 300 levels!',
+    src: 'https://sinadehesh.github.io/Happy-Fruit-merge/bomber/'
 }];
 const KEEP_LOADED = 1; // slides on each side of the one on screen that keep their game loaded
 const EMOJIS = ['🎮', '🕹️', '👾', '🎲', '🧩', '🚀', '🐙', '🦄', '🐸', '🍄', '⭐', '🏁', '🎯', '🐉', '🪐', '🍩'];

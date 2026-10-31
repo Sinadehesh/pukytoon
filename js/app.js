@@ -30,6 +30,21 @@ const cap = window.Capacitor;
 const native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
 const plugins = (cap && cap.Plugins) || {};
 
+// Claude, Gemini and Kimi pages refuse to be shown inside another page, so their games can't sit in the
+// feed. The app plays them full screen in its own web view (no browser, Back returns to the feed); the
+// website can only open them in a new tab.
+const playsInApp = native && !!plugins.InAppBrowser;
+const IN_APP_VIEW = {
+    showURL: false, showToolbar: true, closeButtonText: 'Back to feed', toolbarPosition: 0,
+    showNavigationButtons: false, leftToRight: false, customWebViewUserAgent: null,
+    clearCache: false, clearSessionCache: false, // keep the games' saves between plays
+    mediaPlaybackRequiresUserAction: false,
+    android: { allowZoom: false, hardwareBack: true, pauseMedia: true },
+    iOS: { allowOverScroll: false, enableViewportScale: false, allowInLineMediaPlayback: true,
+           surpressIncrementalRendering: false, viewStyle: 2, animationEffect: 2, // full screen, slides up
+           allowsBackForwardNavigationGestures: false } // swipes belong to the game
+};
+
 const feed = document.getElementById('feed');
 const playTitle = document.getElementById('play-title');
 const sheet = document.getElementById('sheet');
@@ -85,7 +100,7 @@ function slide(game, index, liked) {
     cover.type = 'button';
     cover.setAttribute('aria-label', `Play ${game.title}`);
     cover.append(el('span', 'play-btn', '▶ Play'));
-    if (opensOutside) cover.append(el('span', 'play-note', 'Opens full screen'));
+    if (opensOutside) cover.append(el('span', 'play-note', playsInApp ? 'Plays full screen' : 'Opens in a new tab'));
     cover.addEventListener('click', () => play(index));
 
     const caption = el('div', 'caption');
@@ -108,7 +123,7 @@ function slide(game, index, liked) {
     rail.append(like);
     if (game.kind === 'link') {
         const open = railButton('↗', 'Open in the browser');
-        open.addEventListener('click', () => openExternal(game.url));
+        open.addEventListener('click', () => openInBrowser(game.url));
         rail.append(open);
     }
     if (game.kind !== 'builtin') {
@@ -232,7 +247,7 @@ function play(i) {
     const game = items[i];
     if (!game) return;
     if (i !== active) { go(i); return; }
-    if (game.kind === 'link' && !game.embeddable) { openExternal(game.url); return; }
+    if (game.kind === 'link' && !game.embeddable) { playOutsideFeed(game.url); return; }
     playing = true;
     document.body.classList.add('playing');
     playTitle.textContent = game.title;
@@ -273,8 +288,14 @@ feed.addEventListener('touchend', (e) => {
     if (quick) setTimeout(() => { if (active === from) go(from + Math.sign(dy)); }, 450);
 }, { passive: true });
 
-function openExternal(url) {
-    if (native && plugins.Browser) plugins.Browser.open({ url, toolbarColor: '#0b0a12', presentationStyle: 'fullscreen' });
+function playOutsideFeed(url) {
+    if (playsInApp) plugins.InAppBrowser.openInWebView({ url, options: IN_APP_VIEW });
+    else window.open(url, '_blank', 'noopener');
+}
+
+// The ↗ button: the page in the phone's own browser, for when someone wants it there
+function openInBrowser(url) {
+    if (playsInApp) plugins.InAppBrowser.openInExternalBrowser({ url });
     else window.open(url, '_blank', 'noopener');
 }
 
@@ -320,7 +341,9 @@ function updateDetect() {
     if (!info) detectEl.textContent = '';
     else if (info.kind === 'link') {
         detectEl.textContent = `🔗 ${SOURCES[info.source].name} link · ` +
-            (info.embeddable ? 'plays right in the feed' : 'opens full screen when you tap Play');
+            (info.embeddable ? 'plays right in the feed'
+                : playsInApp ? 'plays full screen in Pukytoon'
+                : 'opens in a new tab here (paste its code to play it in the feed)');
     } else {
         detectEl.textContent = `</> ${FORMAT_NAMES[info.format]} · plays right in the feed`;
     }

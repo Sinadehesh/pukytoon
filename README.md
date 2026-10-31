@@ -20,7 +20,7 @@ The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinad
 
 | You drop | What happens |
 |---|---|
-| A **Claude** link (`claude.ai/public/artifacts/…`, or Claude's embed code) | A card in the feed; **Play** opens the game full screen in the in-app browser. |
+| A **Claude** link (`claude.ai/public/artifacts/…`, or Claude's embed code) | A card in the feed; **Play** opens the game full screen inside the app, with **Back to feed** to return (on the website: a new tab). |
 | A **Gemini** link (`gemini.google.com/share/…`, `g.co/gemini/share/…`) | The same. |
 | A **Kimi** link (`kimi.com/…`) | The same. |
 | Any other link (your own site, itch.io, GitHub Pages, …) | Plays right in the feed. If the site refuses to be shown inside another page, tap **↗** to open it. |
@@ -29,8 +29,10 @@ The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinad
 | Plain **JavaScript** | Runs on an empty page. |
 
 Links are the quickest, but Claude, Gemini and Kimi don't let other apps show their pages inside a frame
-(their servers send `X-Frame-Options` / `frame-ancestors`), so a link game opens full screen instead of
-playing in the feed. For a game that plays *inside* the feed, copy its code and paste that.
+(their servers send `X-Frame-Options` / `frame-ancestors`), so a link game can't sit in the feed itself. The
+app plays it full screen in its own web view instead (`@capacitor/inappbrowser`: no browser, no address bar,
+**Back to feed** returns you where you were); a website has no such view, so there it opens in a new tab. For a
+game that plays *inside* the feed, copy its code and paste that.
 
 Code can come straight from the chat: the ```` ``` ```` fences and the sentences around them are dropped.
 You can also pick a file (`.html`, `.jsx`, `.tsx`, `.js`).
@@ -85,8 +87,8 @@ app/                           the Android app (Capacitor 8): build-web.mjs, and
 - Only the game on screen and its neighbours are loaded; the rest are dropped to keep the phone fast.
 - The feed tells games `{pukytoon: 'pause'}` when they leave the screen and `{pukytoon: 'resume'}` when they come
   back (with `postMessage`). Happy Animal Merge stops its physics; other games can listen for it too.
-- On Android, link games open in the in-app browser (`@capacitor/browser`) and the back button is handled by
-  `@capacitor/app`. `MainActivity` keeps game frames inside the feed (Capacitor would otherwise send any
+- In the app, link games play in Pukytoon's own full-screen web view (`@capacitor/inappbrowser`, which needs
+  Android 8.0 or newer) and the back button is handled by `@capacitor/app`. `MainActivity` keeps game frames inside the feed (Capacitor would otherwise send any
   non-app page to the phone's browser).
 - To add another built-in game, add it to `BUILTIN` at the top of `js/app.js`, with `src` set to its page in
   `games/<name>/` (part of the app, works offline) or to the address where it's published (loads live).

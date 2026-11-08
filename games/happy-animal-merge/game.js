@@ -291,14 +291,15 @@ sizeBtn.addEventListener('click', (e) => {
     location.replace(sizeBtn.href);
 });
 
-// The Pukytoon feed pauses the physics while the game is scrolled away or under its cover.
-// Runner.run starts a new loop each call, so only resume when actually paused.
+// The Pukytoon feed pauses the physics while the game waits under its Play cover (the bridge,
+// sdk/pukytoon-sdk.js). Runner.run starts a new loop each call, so only resume when actually paused.
 let paused = false;
-window.addEventListener('message', (e) => {
-    if (!e.data || typeof e.data.pukytoon !== 'string') return;
-    if (e.data.pukytoon === 'pause' && !paused) { Runner.stop(runner); paused = true; }
-    if (e.data.pukytoon === 'resume' && paused) { Runner.run(runner, engine); paused = false; }
-});
+function pause() { if (!paused) { Runner.stop(runner); paused = true; } }
+function resume() { if (paused) { Runner.run(runner, engine); paused = false; } }
+if (window.Pukytoon) {
+    Pukytoon.on('pause', pause).on('resume', resume);
+    if (Pukytoon.state.paused) pause();
+}
 
 window.addEventListener('resize', updateUI);
 updateUI();

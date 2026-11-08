@@ -9,3 +9,5 @@ app/android/local.properties
 # shared test-build key and is meant to be here).
 *.jks
 keystore.properties
+node_modules/
+tests/output/

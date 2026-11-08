@@ -12,6 +12,7 @@ export const SOURCES = {
     gemini: { name: 'Gemini', colors: ['#4f7cff', '#a66bff'] },
     kimi: { name: 'Kimi', colors: ['#1f2937', '#3b82f6'] },
     web: { name: 'Web', colors: ['#0ea5a4', '#22d3ee'] },
+    studio: { name: 'the Studio', colors: ['#7b5cff', '#ff5fa2'] },
     other: { name: 'Other', colors: ['#475569', '#94a3b8'] }
 };
 
@@ -100,12 +101,15 @@ export function guessTitle(info) {
 // --- Building the page a code game runs in ---
 
 // Inside the sandbox there is no real localStorage (the frame has no origin of its own), so games get a
-// stand-in that starts with what they saved last time and sends every change to the app to keep.
-// Errors show in a banner, so a broken game says why instead of staying blank.
-function preamble(id, saved) {
-    return `<script>(function(){
-var id=${json(id)},data=${json(saved || {})};
-function send(){try{parent.postMessage({pukytoonSave:id,data:data},'*')}catch(e){}}
+// stand-in that starts with what they saved last time and sends every change to the app through the
+// bridge SDK (sdk/pukytoon-sdk.js, loaded from the app). Errors show in a banner, so a broken game says why
+// instead of staying blank.
+function preamble(saved) {
+    return `<script>window.__PUKYTOON_SAVE=${json(saved || {})};<\/script>
+<script src="sdk/pukytoon-sdk.js"><\/script>
+<script>(function(){
+var P=window.Pukytoon,data=P?P.save.all():{};
+function send(){if(P)P.save.flush()}
 function store(keep){var d=keep?data:{};return{
 getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},
 setItem:function(k,v){d[String(k)]=String(v);if(keep)send()},
@@ -136,7 +140,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;showErro
 const VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">';
 
 export function buildDocument(game, saved) {
-    const head = preamble(game.id, saved);
+    const head = preamble(saved);
     if (game.format === 'react') return reactPage(game.code, head);
     if (game.format === 'js') return jsPage(game.code, head);
     return htmlPage(game.code, head);

@@ -1,0 +1,41 @@
+name: Test
+
+# On every push: the mechanics gate (each Creator Studio mechanic at its settings' extremes, with every
+# picture missing, replayed for determinism, and played by bots), the feed and the Studio, in headless
+# Chromium on a phone-sized screen. The screenshots are kept with the run.
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Chromium for the tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the tests
+        run: npm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-screenshots-${{ github.run_number }}
+          path: tests/output/
+          if-no-files-found: ignore

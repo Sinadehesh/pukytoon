@@ -1,12 +1,14 @@
 # Pukytoon
 
-Games made with Claude, Gemini or Kimi, in a feed you swipe through like videos.
+Games made with Claude, Gemini or Kimi, or in Pukytoon's own Creator Studio, in a feed you swipe through like
+videos.
 
-- **Swipe** up and down: one game per screen, snapping like a video feed. The game shows live behind its cover.
+- **Swipe** up and down: one game per screen, snapping like a video feed. Each game waits under its cover.
 - **Tap ▶ Play** and the game gets the whole screen and every touch. **‹** (or the phone's back button) takes
-  you back to the feed; **↻** restarts the game.
+  you back to the feed and pauses it; **↻** restarts the game.
 - **Tap +** (or swipe to the end of the feed) to add a game: drop its **share link** or paste its **code**.
   Pukytoon works out which one it is, and what kind of code.
+- **Tap ✦ Create** to make a game in the **Creator Studio**, no code needed.
 
 The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge):
 
@@ -15,6 +17,29 @@ The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinad
 - **Zombie Bomber** (merge bombs, drop them on the zombies, 300 levels), loaded live from
   [its GitHub Pages address](https://sinadehesh.github.io/Happy-Fruit-merge/bomber/), so whatever you push to
   Happy-Fruit-merge shows up in Pukytoon without a new app build. It needs the internet.
+
+## Creator Studio
+
+Pick a game type and a look, tune it while a live preview plays, and publish it to the feed.
+
+| Game type | You | Settings |
+|---|---|---|
+| **Drop and merge** | Drop items in a box; two of a kind merge into the next one (Happy Animal Merge's rules and physics) | Gravity, bounciness, kinds that drop, item size, danger line, reverse sizes |
+| **Endless runner** | Tap to jump over obstacles and grab treats | Speed, speed-up, gravity, jump height, double jump, spacing, treats, lives |
+| **Match-3** | Swap neighbours to line up three of a kind; chains score more | Kinds of tile, columns, rows, animation speed, hints |
+| **Whack-a-mole** | Tap what pops up, but leave the bad one alone | Holes, time up, how often, bad ones, speed-up |
+
+- **Six looks** (Barnyard, Pet Pals, Farm Fresh, Sweet Shop, Gem Mine, Pixel Treasure) from Happy-Fruit-merge's
+  art, and any single picture can be swapped for any of the library's 74.
+- **How to win and lose**: a preset for each game ("Make the top item", "Run 500 m", "25 moves"…) or your own rule
+  such as `score >= 1000 || time >= 90`, checked as you type (only numbers, the game's own counts and
+  operators, never code).
+- **Music**: two tracks by Kevin MacLeod (CC BY 4.0, credited in the Studio and on the game's end screen).
+- The settings marked live change the running preview as the slider moves; the rest restart it.
+- **Publish** saves the game as a *GameSpec*: a few hundred bytes of data (mechanic, settings, look, rules,
+  name) that `studio/play.html` turns back into the game. **✎** on its card opens it in the Studio again.
+
+Studio games work offline: the runtime, the mechanics and the whole asset library are part of the app.
 
 ## Adding your games
 
@@ -41,7 +66,7 @@ Each code game runs in a sandboxed frame: it can't reach the app or the other ga
 (high scores, progress) is kept by the app, so it survives restarts. If a game crashes, a red banner shows
 the error; paste it into the AI that made the game to get it fixed.
 
-Everything you add is saved on the phone (the app's own storage).
+Everything you add or make is saved on the phone (the app's own storage).
 
 ## Installing on Android
 
@@ -51,8 +76,8 @@ Every push builds the app on GitHub (Actions → *Build Android app*) and puts t
 Each new build installs over the last one and keeps your games (they're all signed with the same test key,
 `app/android/app/debug.keystore`).
 
-The website version: turn on **Settings → Pages → Source: GitHub Actions** once, and every push publishes the
-feed to GitHub Pages too (Actions → *Publish the website*).
+The website is at https://sinadehesh.github.io/pukytoon/; every push publishes it again (Actions → *Publish the
+website*).
 
 ### Building it yourself
 
@@ -73,25 +98,70 @@ To try the feed in a browser, serve the repo root with any static server: `pytho
 the app id `com.sinadehesh.pukytoon`, which can't change after the first upload. animal-farm-merge's
 `build-aab.yml` workflow and app README cover that, and carry over to this app as they are.
 
+## Tests
+
+Every push runs them on GitHub (Actions → *Test*), in headless Chromium on a phone-sized screen; the
+screenshots are kept with each run. To run them yourself: `npm ci`, `npx playwright install chromium`, then:
+
+```bash
+npm test                        # everything
+node tests/run.mjs mechanics    # or one of: mechanics, feed, studio
+```
+
+- **mechanics**: the gate a Creator Studio mechanic must pass. Each one plays 60 s of random taps, drags and keys
+  at its default settings, at every setting's minimum and maximum, in a dark theme and with every picture
+  failing to load; it must boot in under 4 s, never crash, keep every count a number, fetch nothing from
+  outside the site and draw a screen. The same seed and input must replay the same game. Bots then play it
+  properly: the runner must clear every obstacle at its easiest and hardest settings, match-3 must always
+  have a move that scores, whack-a-mole must be playable without misses.
+- **feed**: swiping, playing, the built-in games, every kind of pasted code, links, saves, likes and removing,
+  and link games as the Android app plays them.
+- **studio**: making, tuning, publishing, playing and editing a game, and Back closing the Studio.
+
 ## How it's built
 
 ```
-index.html, css/pukytoon.css   the feed, the top bar and the add-a-game sheet
-js/app.js                      the feed: slides, playing, adding and removing games, the back button
+index.html, css/pukytoon.css   the feed, the top bar, the add-a-game sheet and the Creator Studio
+js/app.js                      the feed: slides, playing, adding, making and removing games, the back button
 js/runtime.js                  what was dropped (link or code, which kind) and the page each code game runs in
-js/store.js                    the saved games, likes and code games' saves (localStorage)
+js/bridge.js                   the app's end of the bridge: which frame is which game, saves, the watchdog
+js/studio.js                   the Creator Studio
+js/store.js                    the saved games, likes and games' saves (localStorage)
+sdk/pukytoon-sdk.js            the game's end of the bridge, loaded into every game
+runtime/runtime.js             what Studio games run on: loop, input, drawing, sound, rules, title and end screens
+runtime/rules.js, spec.js      win/lose rules (a small parser, never eval) and the GameSpec in a link
+runtime/mechanics/             one module per game type, listed in index.js
+studio/play.html, play.js      the page that plays a GameSpec
+assets/library/                the asset library: sprites/, sfx/, music/, sprites.js, packs.js (the looks), CREDITS.md
 games/happy-animal-merge/      the built-in game (Matter.js physics, kept in vendor/ so it works offline)
+tests/                         the tests (npm test)
+tools/build-library.mjs        rebuilds assets/library/sprites.js after adding pictures (npm run library)
 app/                           the Android app (Capacitor 8): build-web.mjs, android/
 ```
 
+- **The bridge.** Games and the app talk only through `postMessage`, as `{ pukytoon: 1, type, payload }`. The game
+  says `hello` and `ready`, sends `save`, `score`, `event` and `error`; the app sends `init` (its saves), `start`,
+  `pause`, `resume`, `mute`, `ping`, and `spec.update` to the Studio's preview. Games run only while they're being
+  played; a game that stops answering pings for 6 s gets a *not responding* screen with Reload. The SDK and the
+  Happy Animal Merge page show how a game uses it.
 - Only the game on screen and its neighbours are loaded; the rest are dropped to keep the phone fast.
-- The feed tells games `{pukytoon: 'pause'}` when they leave the screen and `{pukytoon: 'resume'}` when they come
-  back (with `postMessage`). Happy Animal Merge stops its physics; other games can listen for it too.
 - In the app, link games play in Pukytoon's own full-screen web view (`@capacitor/inappbrowser`, which needs
-  Android 8.0 or newer) and the back button is handled by `@capacitor/app`. `MainActivity` keeps game frames inside the feed (Capacitor would otherwise send any
-  non-app page to the phone's browser).
+  Android 8.0 or newer) and the back button is handled by `@capacitor/app`. `MainActivity` keeps game frames
+  inside the feed (Capacitor would otherwise send any non-app page to the phone's browser).
 - To add another built-in game, add it to `BUILTIN` at the top of `js/app.js`, with `src` set to its page in
   `games/<name>/` (part of the app, works offline) or to the address where it's published (loads live).
 
+### Adding a mechanic or art
+
+- **A mechanic**: a module in `runtime/mechanics/` exporting `manifest` (settings as JSON Schema, picture and
+  music slots by role, the counts its rules can use, rule presets, input actions) and `create(ctx, params)`,
+  which returns `start`, `update(dt, input)`, `render(gfx)`, and optionally `onParams`, `serialize` and
+  `destroy`. It never loads files or reads raw input: it asks `ctx.slot(name)` for pictures and gets named
+  actions. Add it to `runtime/mechanics/index.js`, then `npm test`: it joins the gate by itself.
+- **Pictures**: put 256×256 PNGs in `assets/library/sprites/<set>/` (a numbered set is a ready-made merge
+  chain) and run `npm run library`; give it Happy-Fruit-merge's `shapes.js` to bring their traced hitboxes:
+  `node tools/build-library.mjs ../Happy-Fruit-merge/shapes.js`.
+- **A look**: an entry in `PACKS` in `assets/library/packs.js`: its colours, and which pictures fill each role.
+
 Code games need the internet the first time they load their libraries (React, Tailwind, packages);
-Happy Animal Merge works offline.
+Happy Animal Merge and Studio games work offline.

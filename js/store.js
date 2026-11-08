@@ -29,6 +29,10 @@ export function addGame(game) {
     write(GAMES_KEY, [game, ...listGames()]);
 }
 
+export function updateGame(id, changes) {
+    write(GAMES_KEY, listGames().map(g => (g.id === id ? { ...g, ...changes } : g)));
+}
+
 export function removeGame(id) {
     write(GAMES_KEY, listGames().filter(g => g.id !== id));
     try { localStorage.removeItem(SAVE_PREFIX + id); } catch (e) {}

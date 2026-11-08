@@ -1,7 +1,11 @@
-// Pukytoon: swipe up and down through games, tap one to play it, and add your own from a link or code.
+// Pukytoon: swipe up and down through games, tap one to play it, add your own from a link or code, or make
+// one in the Creator Studio.
 
 import { SOURCES, FORMAT_NAMES, detectInput, guessTitle, buildDocument } from './runtime.js';
 import * as store from './store.js';
+import * as bridge from './bridge.js';
+import { openStudio, closeStudio, isOpen as studioOpen } from './studio.js';
+import { encodeSpec } from '../runtime/spec.js';
 
 // Games that come with the app, always at the top of the feed. `src` is a page in games/, or a live
 // address for a game that's published elsewhere (it then needs the internet, and updates by itself).
@@ -59,14 +63,13 @@ const toastEl = document.getElementById('toast');
 let items = [];      // the games in feed order
 let active = -1;     // index of the slide on screen
 let playing = false;
-const frames = new Map(); // code game window -> its id, so a game can only write its own saves
 
 // --- Feed ---
 
 function render(focusId) {
     items = [...BUILTIN, ...store.listGames()];
     const liked = store.likes();
-    frames.clear();
+    feed.querySelectorAll('iframe').forEach(f => bridge.unregister(f));
     feed.replaceChildren(...items.map((game, i) => slide(game, i, liked.has(game.id))), addSlide());
     active = -1;
     const i = focusId ? items.findIndex(g => g.id === focusId) : -1;
@@ -105,7 +108,7 @@ function slide(game, index, liked) {
 
     const caption = el('div', 'caption');
     caption.append(
-        el('span', 'chip', game.kind === 'builtin' ? 'Pukytoon original' : `Made with ${source.name}`),
+        el('span', 'chip', game.kind === 'builtin' ? 'Pukytoon original' : game.kind === 'studio' ? 'Made in the Studio' : `Made with ${source.name}`),
         el('h2', '', game.title),
         el('p', '', blurb(game))
     );
@@ -125,6 +128,11 @@ function slide(game, index, liked) {
         const open = railButton('↗', 'Open in the browser');
         open.addEventListener('click', () => openInBrowser(game.url));
         rail.append(open);
+    }
+    if (game.kind === 'studio') {
+        const edit = railButton('✎', 'Edit in the Studio');
+        edit.addEventListener('click', () => openCreate(game));
+        rail.append(edit);
     }
     if (game.kind !== 'builtin') {
         const del = railButton('🗑', 'Remove from the feed');
@@ -146,7 +154,7 @@ function railButton(icon, label) {
 }
 
 function blurb(game) {
-    if (game.kind === 'builtin') return game.blurb;
+    if (game.kind === 'builtin' || game.kind === 'studio') return game.blurb;
     if (game.kind === 'code') return FORMAT_NAMES[game.format] || 'Game';
     return hostOf(game.url);
 }
@@ -163,13 +171,18 @@ function addSlide() {
     button.type = 'button';
     button.setAttribute('aria-label', 'Add a game');
     button.addEventListener('click', openSheet);
+    const studio = el('button', 'studio-cta', '✦ Or make one in the Creator Studio');
+    studio.type = 'button';
+    studio.addEventListener('click', () => openCreate());
     stage.append(button, el('h2', '', 'Add your game'),
-        el('p', '', 'Made a game with Claude, Gemini or Kimi? Drop its share link, or its code, and it joins your feed.'));
+        el('p', '', 'Made a game with Claude, Gemini or Kimi? Drop its share link, or its code, and it joins your feed.'),
+        studio);
     s.append(stage);
     return s;
 }
 
-// Games near the screen are loaded; the rest are dropped to keep the phone fast
+// Games near the screen are loaded; the rest are dropped to keep the phone fast. Games run only while
+// they're being played: in the feed they wait, paused, under their Play cover.
 function setActive(index) {
     if (index === active) return;
     active = index;
@@ -178,7 +191,7 @@ function setActive(index) {
         if (j >= items.length) return; // the add screen
         if (Math.abs(j - index) <= KEEP_LOADED) mount(j);
         else unmount(j);
-        tell(j, j === index ? 'resume' : 'pause');
+        tell(j, 'pause');
     });
     if (index > 0) feed.querySelector('.swipe-hint')?.remove();
 }
@@ -196,6 +209,8 @@ function mount(i) {
     frame.allow = 'fullscreen; gamepad; accelerometer; gyroscope; clipboard-write';
     if (game.kind === 'builtin') {
         frame.src = game.src;
+    } else if (game.kind === 'studio') {
+        frame.src = `studio/play.html#${encodeSpec(game.spec)}`;
     } else if (game.kind === 'link') {
         frame.setAttribute('sandbox', LINK_SANDBOX);
         frame.src = game.url;
@@ -203,17 +218,20 @@ function mount(i) {
         frame.setAttribute('sandbox', CODE_SANDBOX);
         frame.srcdoc = buildDocument(game, store.loadSave(game.id));
     }
-    // A game that finishes loading off screen is paused straight away
-    frame.addEventListener('load', () => { if (i !== active) tell(i, 'pause'); });
+    // Messages sent before a page loads are lost, so tell it again once it has: wait, or play
+    frame.addEventListener('load', () => {
+        if (playing && i === active) startGame(i);
+        else tell(i, 'pause');
+    });
     stage.append(frame);
-    if (game.kind === 'code') frames.set(frame.contentWindow, game.id);
+    bridge.register(frame, game.id, { embedded: true });
 }
 
 function unmount(i) {
     const stage = feed.children[i].querySelector('.stage');
     const frame = stage.querySelector('iframe');
     if (!frame) return;
-    frames.delete(frame.contentWindow);
+    bridge.unregister(frame);
     stage.replaceChildren();
 }
 
@@ -234,10 +252,34 @@ function emojiFor(id) {
     return EMOJIS[h % EMOJIS.length];
 }
 
-// Games may listen for {pukytoon: 'pause' | 'resume'} to stop while they're off screen
+// Through the bridge (sdk/pukytoon-sdk.js): pause, resume, start...
 function tell(i, what) {
     const frame = feed.children[i]?.querySelector('iframe');
-    if (frame && frame.contentWindow) frame.contentWindow.postMessage({ pukytoon: what }, '*');
+    if (frame) bridge.send(frame, what);
+}
+
+function startGame(i) {
+    tell(i, 'resume');
+    tell(i, 'start');
+    const frame = feed.children[i]?.querySelector('iframe');
+    if (frame) bridge.watch(frame, () => stuck(i));
+}
+
+// The game being played stopped answering the bridge's pings
+function stuck(i) {
+    const s = feed.children[i];
+    if (!s || s.querySelector('.stuck')) return;
+    const box = el('div', 'stuck');
+    const reload = el('button', 'go', 'Reload');
+    reload.type = 'button';
+    reload.addEventListener('click', () => { box.remove(); remount(i); });
+    const back = el('button', '', 'Back to feed');
+    back.type = 'button';
+    back.addEventListener('click', () => { box.remove(); exitPlay(); });
+    const row = el('div', 'row');
+    row.append(reload, back);
+    box.append(el('h3', '', 'This game isn’t responding'), el('p', '', 'It may be stuck. Reload it to try again.'), row);
+    s.append(box);
 }
 
 // --- Playing ---
@@ -252,7 +294,7 @@ function play(i) {
     document.body.classList.add('playing');
     playTitle.textContent = game.title;
     history.pushState({ pukytoonPlaying: true }, '');
-    tell(i, 'resume');
+    startGame(i);
     feed.children[i].querySelector('iframe')?.focus();
 }
 
@@ -265,10 +307,19 @@ function exitPlay() {
 function stopPlaying() {
     playing = false;
     document.body.classList.remove('playing');
+    bridge.unwatch();
+    tell(active, 'pause');
+    feed.children[active]?.querySelector('.stuck')?.remove();
 }
 
-// The browser's (and the phone's) back button leaves the game
-window.addEventListener('popstate', () => { if (playing) stopPlaying(); });
+// The browser's (and the phone's) back button leaves the game, or the Studio
+window.addEventListener('popstate', () => {
+    if (studioOpen()) {
+        if (!closeStudio()) history.pushState({ pukytoonStudio: true }, '');   // kept, to save first
+        return;
+    }
+    if (playing) stopPlaying();
+});
 
 function go(i) {
     feed.children[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -309,16 +360,41 @@ function remove(game) {
 
 document.getElementById('btn-back').addEventListener('click', exitPlay);
 document.getElementById('btn-restart').addEventListener('click', () => {
+    feed.children[active]?.querySelector('.stuck')?.remove();
     remount(active);
     feed.children[active].querySelector('iframe')?.focus();
 });
 
-// Code games send their saves here; each may only write its own
-window.addEventListener('message', (e) => {
-    const d = e.data;
-    if (!d || typeof d.pukytoonSave !== 'string' || frames.get(e.source) !== d.pukytoonSave) return;
-    if (d.data && typeof d.data === 'object') store.writeSave(d.pukytoonSave, d.data);
-});
+// --- Creator Studio ---
+
+// game: a studio game to edit, or nothing for a new one
+function openCreate(game) {
+    if (!sheet.hidden) closeSheet();
+    history.pushState({ pukytoonStudio: true }, '');
+    openStudio(game || null, {
+        onClose: () => { if (history.state && history.state.pukytoonStudio) history.back(); },
+        onPublish: result => {
+            if (result.id) {
+                store.updateGame(result.id, { title: result.title, spec: result.spec, blurb: result.blurb });
+                render(result.id);
+                toast('Saved');
+                return;
+            }
+            const made = { id: store.newId(), kind: 'studio', source: 'studio', title: result.title, spec: result.spec, blurb: result.blurb, added: Date.now() };
+            try {
+                store.addGame(made);
+            } catch (err) {
+                toast('Out of space for games. Remove one and try again.');
+                return;
+            }
+            render(made.id);
+            toast('Published to your feed');
+        }
+    });
+}
+
+document.getElementById('btn-create').addEventListener('click', () => openCreate());
+document.getElementById('sheet-studio').addEventListener('click', () => openCreate());
 
 // --- Add a game ---
 
@@ -397,6 +473,7 @@ function toast(text) {
 // --- Keys and the phone's back button ---
 
 document.addEventListener('keydown', (e) => {
+    if (studioOpen()) { if (e.key === 'Escape') closeStudio(); return; }
     if (!sheet.hidden) { if (e.key === 'Escape') closeSheet(); return; }
     if (playing) { if (e.key === 'Escape') exitPlay(); return; }
     if (e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); go(active + 1); }
@@ -405,7 +482,8 @@ document.addEventListener('keydown', (e) => {
 
 if (native && plugins.App) {
     plugins.App.addListener('backButton', () => {
-        if (!sheet.hidden) closeSheet();
+        if (studioOpen()) closeStudio();
+        else if (!sheet.hidden) closeSheet();
         else if (playing) exitPlay();
         else plugins.App.minimizeApp();
     });

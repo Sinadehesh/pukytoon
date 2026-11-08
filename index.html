@@ -15,7 +15,10 @@
     <header class="topbar">
         <div class="feed-bar">
             <div class="logo">puky<span>toon</span></div>
-            <button id="btn-add" class="icon-btn" type="button" aria-label="Add a game">+</button>
+            <div class="bar-actions">
+                <button id="btn-create" class="create-btn" type="button">✦ Create</button>
+                <button id="btn-add" class="icon-btn" type="button" aria-label="Add a game">+</button>
+            </div>
         </div>
         <div class="play-bar">
             <button id="btn-back" class="icon-btn" type="button" aria-label="Back to the feed">‹</button>
@@ -31,7 +34,8 @@
         <form id="add-form" class="sheet-card" autocomplete="off">
             <div class="grab" data-close></div>
             <h2>Add a game</h2>
-            <p class="hint">Drop the game's share link (best), or paste its code.</p>
+            <p class="hint">Drop the game's share link (best), or paste its code.
+                <button id="sheet-studio" class="link-btn" type="button">No game yet? Make one in the Creator Studio</button></p>
             <textarea id="drop" rows="5" spellcheck="false"
                 placeholder="https://claude.ai/public/artifacts/…&#10;https://gemini.google.com/share/…&#10;&#10;…or paste the code: <html>… / export default function Game() {…}"></textarea>
             <div id="detect" class="detect" aria-live="polite"></div>
@@ -57,6 +61,47 @@
             </details>
         </form>
     </div>
+
+    <section id="studio" class="studio" hidden aria-label="Creator Studio">
+        <header class="studio-bar">
+            <button id="studio-close" class="icon-btn" type="button" aria-label="Close the Studio">‹</button>
+            <div class="studio-name">Creator Studio</div>
+            <button id="studio-publish" class="primary studio-publish" type="button">Publish</button>
+        </header>
+        <div class="studio-preview"><iframe id="studio-frame" title="Preview of your game" allow="autoplay; fullscreen"></iframe></div>
+        <div id="studio-panel" class="studio-panel">
+            <section>
+                <h3>Game</h3>
+                <div id="studio-mechanics" class="cards"></div>
+            </section>
+            <section>
+                <h3>Look</h3>
+                <div id="studio-themes" class="cards"></div>
+                <div id="studio-pictures" class="slots"></div>
+            </section>
+            <section>
+                <h3>Tune it</h3>
+                <div id="studio-params" class="params"></div>
+                <button id="studio-reset" class="link-btn" type="button">Reset to the defaults</button>
+            </section>
+            <section>
+                <h3>How to win</h3>
+                <div id="studio-win" class="rule"></div>
+                <h3>How to lose</h3>
+                <div id="studio-lose" class="rule"></div>
+                <p id="studio-vars" class="studio-note"></p>
+            </section>
+            <section>
+                <h3>Music</h3>
+                <div id="studio-music" class="chips"></div>
+                <p id="studio-credit" class="studio-note"></p>
+            </section>
+            <section>
+                <h3>Name</h3>
+                <input id="studio-title" class="name" type="text" maxlength="60" autocomplete="off">
+            </section>
+        </div>
+    </section>
 
     <div id="toast" class="toast" role="status"></div>
 

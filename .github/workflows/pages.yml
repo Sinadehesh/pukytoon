@@ -41,7 +41,7 @@ jobs:
 
       - name: Site files
         if: steps.pages.outputs.on == 'true'
-        run: mkdir _site && cp -r index.html manifest.webmanifest css js games icons _site/
+        run: mkdir _site && cp -r index.html manifest.webmanifest css js games icons runtime studio sdk assets _site/
 
       - uses: actions/configure-pages@v5
         if: steps.pages.outputs.on == 'true'

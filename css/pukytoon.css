@@ -99,11 +99,12 @@ body.playing .rail { display: none; }
 }
 .caption h2 { margin: 8px 0 4px; font-size: 21px; line-height: 1.2; }
 .caption p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.35; }
-.chip {
-    display: inline-block; padding: 3px 10px; border-radius: 999px;
+.caption .chip {
+    display: inline-block; min-height: 0; padding: 3px 10px; border: 0; border-radius: 999px;
     font-size: 12px; font-weight: 700; text-shadow: none;
     background: linear-gradient(90deg, var(--c1), var(--c2));
 }
+.caption .by { margin-top: 3px; font-size: 13px; font-weight: 700; color: var(--fg); }
 
 .rail {
     position: absolute; right: 10px; bottom: calc(26px + env(safe-area-inset-bottom));
@@ -115,6 +116,8 @@ body.playing .rail { display: none; }
     display: grid; place-items: center;
 }
 .rail button.liked { color: #ff3b6b; }
+.rail-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.rail .count { font-size: 12px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 
 .swipe-hint {
     position: absolute; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%);
@@ -338,3 +341,41 @@ body.playing .swipe-hint { display: none; }
     .studio-preview { height: auto; min-height: 0; }
     .studio-panel { margin-top: 0; border-radius: 0; }
 }
+
+/* --- Account, and the menu of choices --- */
+
+.account-btn { font-size: 20px; font-weight: 800; }
+.account-btn.signed-in { background: linear-gradient(135deg, var(--pink), var(--violet)); font-size: 17px; }
+.primary.wide { width: 100%; flex: none; margin-top: 12px; }
+.fine { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.sheet-card .code-input {
+    font: 700 24px/1.2 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    letter-spacing: 8px; text-align: center;
+}
+.handle-field {
+    display: flex; align-items: center; gap: 2px; margin-top: 10px; padding: 0 12px;
+    border: 1px solid var(--line); border-radius: 12px; background: #0f0e16;
+}
+.handle-field:focus-within { outline: 2px solid var(--violet); }
+.handle-field span { color: var(--muted); font-weight: 700; }
+.handle-field input {
+    flex: 1; min-width: 0; padding: 12px 0; border: 0; outline: 0;
+    background: transparent; color: var(--fg); font: inherit; font-size: 15px;
+}
+.acct-actions { display: flex; gap: 10px; margin-top: 4px; }
+.acct-actions button, .menu-options button {
+    flex: 1; min-height: 48px; border: 0; border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08); font-weight: 700; font-size: 15px;
+}
+.acct-error { margin: 12px 0 0; color: #ffb4b4; font-size: 14px; line-height: 1.4; }
+.acct-error:empty { display: none; }
+.link-btn.danger, .menu-options button.danger { color: #ff8f8f; }
+.fine .link-btn { display: inline; margin: 0; font-size: 13px; }
+.menu-options { display: grid; gap: 8px; }
+.menu-options button { text-align: left; padding: 0 16px; }
+.menu-cancel {
+    width: 100%; min-height: 44px; margin-top: 8px; border: 0; border-radius: 14px;
+    background: transparent; color: var(--muted); font-weight: 700; font-size: 15px;
+}
+.menu-options button:focus-visible, .menu-cancel:focus-visible, .acct-actions button:focus-visible,
+.account-btn:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }

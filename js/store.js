@@ -1,5 +1,5 @@
-// What Pukytoon keeps on the phone: the games you added, the ones you liked, and each code game's saves.
-// Everything lives in the app's localStorage.
+// What Pukytoon keeps on the phone: the games you added or made, the ones you liked, each code game's saves,
+// and whose games you've hidden. Everything lives in the app's localStorage.
 
 const GAMES_KEY = 'pukytoon.games.v1';
 const LIKES_KEY = 'pukytoon.likes.v1';
@@ -60,6 +60,18 @@ export function writeSave(id, data) {
         const text = JSON.stringify(data);
         if (text.length <= MAX_SAVE_CHARS) localStorage.setItem(SAVE_PREFIX + id, text);
     } catch (e) {}
+}
+
+// People whose games they don't want to see (their user ids)
+const BLOCKED_KEY = 'pukytoon.blocked.v1';
+export function blocked() {
+    return new Set(read(BLOCKED_KEY, []));
+}
+
+export function block(userId) {
+    const set = blocked();
+    set.add(userId);
+    try { write(BLOCKED_KEY, [...set]); } catch (e) {}
 }
 
 export function newId() {

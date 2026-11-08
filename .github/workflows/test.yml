@@ -1,8 +1,10 @@
 name: Test
 
 # On every push: the mechanics gate (each Creator Studio mechanic at its settings' extremes, with every
-# picture missing, replayed for determinism, and played by bots), the feed and the Studio, in headless
-# Chromium on a phone-sized screen. The screenshots are kept with the run.
+# picture missing, replayed for determinism, and played by bots), the feed, the Studio and the online side
+# (against a stand-in for Supabase), in headless Chromium on a phone-sized screen; the screenshots are kept
+# with the run. And the database: every migration on a fresh Postgres, then its rules checked as each
+# kind of user would meet them.
 
 on:
   push:
@@ -39,3 +41,28 @@ jobs:
           name: test-screenshots-${{ github.run_number }}
           path: tests/output/
           if-no-files-found: ignore
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Migrations, then the database's rules
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          set -o pipefail
+          files="-f supabase/tests/supabase-stub.sql"
+          for m in supabase/migrations/*.sql; do files="$files -f $m"; done
+          psql -qtA -v ON_ERROR_STOP=1 $files -f supabase/tests/database.sql | grep -v '^$'

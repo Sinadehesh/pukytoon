@@ -1,17 +1,27 @@
 // Runs the tests in a headless phone-sized Chromium against a local copy of the site:
 //   node tests/run.mjs                 all of them
-//   node tests/run.mjs mechanics       one or more of: mechanics, feed, studio
+//   node tests/run.mjs mechanics       one or more of: mechanics, feed, studio, cloud
+// Every browser context gets a stand-in for the Supabase project (tests/fake-cloud.mjs) as context.cloud,
+// so no test reaches the real one.
 import { serve, launch, counter } from './helpers.mjs';
+import { fakeCloud } from './fake-cloud.mjs';
 
 const SUITES = {
     mechanics: () => import('./mechanics.test.mjs'),
     feed: () => import('./feed.test.mjs'),
-    studio: () => import('./studio.test.mjs')
+    studio: () => import('./studio.test.mjs'),
+    cloud: () => import('./cloud.test.mjs')
 };
 
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SUITES);
 const { server, url } = await serve();
 const browser = await launch();
+const newContext = browser.newContext.bind(browser);
+browser.newContext = async (...args) => {
+    const context = await newContext(...args);
+    context.cloud = await fakeCloud(context);
+    return context;
+};
 const results = counter();
 
 for (const name of names) {

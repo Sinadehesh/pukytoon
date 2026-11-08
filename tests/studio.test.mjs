@@ -51,6 +51,8 @@ export async function run({ browser, url, check }) {
     await page.click('#studio-music .chip:has-text("Easy Lemon")'); await wait(300);
     check((await page.textContent('#studio-credit')).includes('Kevin MacLeod'), 'Choosing music shows its credit');
     await page.fill('#studio-title', 'Gummy Fox Dash');
+    check((await page.textContent('#studio-share .chip.selected')) === 'Everyone', 'A new game is for everyone unless you say otherwise');
+    await page.click('#studio-share .chip:has-text("Only on this phone")');   // sharing is the cloud suite's
     await page.screenshot({ path: `${OUT}/studio-02.png` });
 
     await page.click('#studio-publish'); await wait(1500);

@@ -36,9 +36,10 @@ const thumb = (id, className = 'thumb') => {
 
 export const isOpen = () => !$('studio').hidden;
 
-// game: an existing studio game to edit, or null for a new one.
-// onPublish({ id?, title, spec, blurb }) when it's published; onClose() whenever the Studio closes.
-export async function openStudio(game, { onPublish, onClose } = {}) {
+// game: an existing studio game to edit (or one to start from, without an id), or null for a new one.
+// share: who it's for at first, 'everyone' or 'me'.
+// onPublish({ id?, title, spec, blurb, share }) when it's published; onClose() whenever the Studio closes.
+export async function openStudio(game, { onPublish, onClose, share = 'everyone' } = {}) {
     mechanics = mechanics || await loadAll();
     callbacks = { onPublish, onClose };
     const spec = game ? game.spec : null;
@@ -53,9 +54,10 @@ export async function openStudio(game, { onPublish, onClose } = {}) {
         lose: spec && spec.rules && 'lose' in spec.rules ? spec.rules.lose : m.manifest.rules.lose,
         title: game ? game.title : '',
         titleEdited: !!game,
-        dirty: false
+        share,
+        dirty: !!game && !game.id   // a remix is new work
     };
-    $('studio-publish').textContent = game ? 'Save' : 'Publish';
+    $('studio-publish').textContent = game && game.id ? 'Save' : 'Publish';
     freshFrame();
     $('studio').hidden = false;
     $('studio-panel').scrollTop = 0;
@@ -138,6 +140,7 @@ function renderAll() {
     renderParams();
     renderRules();
     renderMusic();
+    renderShare();
     const input = $('studio-title');
     input.value = title();
     input.oninput = () => {
@@ -397,6 +400,23 @@ function renderMusic() {
     $('studio-credit').textContent = current && MUSIC[current] ? MUSIC[current].credit : '';
 }
 
+// Who can play it: everyone (in the Pukytoon feed, needs an account) or only this phone
+function renderShare() {
+    const options = [['everyone', 'Everyone'], ['me', 'Only on this phone']];
+    $('studio-share').replaceChildren(...options.map(([key, name]) => {
+        const b = choice(el('button', 'chip', name), state.share === key);
+        b.addEventListener('click', () => {
+            state.share = key;
+            changed();
+            renderShare();
+        });
+        return b;
+    }));
+    $('studio-share-note').textContent = state.share === 'everyone'
+        ? 'It goes in everyone’s feed, with your name on it. You can take it down any time.'
+        : 'Only you can play it, on this phone.';
+}
+
 function publish() {
     const names = ruleNames(state.m.manifest);
     for (const kind of ['win', 'lose']) {
@@ -409,7 +429,8 @@ function publish() {
         id: state.id,
         title: title(),
         spec: currentSpec(),
-        blurb: `${state.m.manifest.name} · ${state.pack.name}`
+        blurb: `${state.m.manifest.name} · ${state.pack.name}`,
+        share: state.share
     };
     state.dirty = false;
     closeStudio(true);

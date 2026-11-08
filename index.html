@@ -16,6 +16,7 @@
         <div class="feed-bar">
             <div class="logo">puky<span>toon</span></div>
             <div class="bar-actions">
+                <button id="btn-account" class="icon-btn account-btn" type="button" aria-label="Sign in">☺</button>
                 <button id="btn-create" class="create-btn" type="button">✦ Create</button>
                 <button id="btn-add" class="icon-btn" type="button" aria-label="Add a game">+</button>
             </div>
@@ -62,6 +63,58 @@
         </form>
     </div>
 
+    <div id="account" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close></div>
+        <div class="sheet-card account-card">
+            <div class="grab" data-close></div>
+            <form id="acct-email" class="acct-step" autocomplete="on">
+                <h2>Sign in</h2>
+                <p id="acct-why" class="hint"></p>
+                <input id="acct-email-input" class="name" type="email" name="email" autocomplete="email" inputmode="email" placeholder="Your email" required>
+                <button class="primary wide" type="submit">Email me a code</button>
+                <p class="fine">No password: each time, we email you a code. New here? This makes your account.</p>
+            </form>
+            <form id="acct-code" class="acct-step" hidden autocomplete="off">
+                <h2>Check your email</h2>
+                <p class="hint">We sent a code to <b id="acct-email-shown"></b>. Type it here, or tap the link in the email on this phone.</p>
+                <input id="acct-code-input" class="name code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="123456" required>
+                <button class="primary wide" type="submit">Sign in</button>
+                <p class="fine"><button id="acct-resend" class="link-btn" type="button">Send a new code</button> ·
+                    <button id="acct-other" class="link-btn" type="button">Use another email</button></p>
+            </form>
+            <form id="acct-name" class="acct-step" hidden autocomplete="off">
+                <h2>Pick your name</h2>
+                <p class="hint">It shows on the games you share.</p>
+                <input id="acct-display" class="name" type="text" maxlength="50" placeholder="Your name" required>
+                <label class="handle-field"><span>@</span><input id="acct-handle" type="text" maxlength="24" placeholder="your_name"
+                    autocapitalize="off" autocorrect="off" spellcheck="false" pattern="[a-z0-9_]{3,24}" required></label>
+                <p class="fine">Your @name: 3 to 24 small letters, numbers or _</p>
+                <button class="primary wide" type="submit">Save</button>
+            </form>
+            <div id="acct-me" class="acct-step" hidden>
+                <h2 id="acct-me-name"></h2>
+                <p id="acct-me-detail" class="hint"></p>
+                <div class="acct-actions">
+                    <button id="acct-rename" type="button">Change my name</button>
+                    <button id="acct-signout" type="button">Sign out</button>
+                </div>
+                <p class="fine"><button id="acct-delete" class="link-btn danger" type="button">Delete my account</button></p>
+            </div>
+            <p id="acct-error" class="acct-error" role="alert"></p>
+        </div>
+    </div>
+
+    <div id="menu" class="sheet" hidden>
+        <div class="sheet-backdrop" data-close></div>
+        <div class="sheet-card menu-card">
+            <div class="grab" data-close></div>
+            <h2 id="menu-title"></h2>
+            <p id="menu-text" class="hint"></p>
+            <div id="menu-options" class="menu-options"></div>
+            <button class="menu-cancel" type="button" data-close>Cancel</button>
+        </div>
+    </div>
+
     <section id="studio" class="studio" hidden aria-label="Creator Studio">
         <header class="studio-bar">
             <button id="studio-close" class="icon-btn" type="button" aria-label="Close the Studio">‹</button>
@@ -99,6 +152,11 @@
             <section>
                 <h3>Name</h3>
                 <input id="studio-title" class="name" type="text" maxlength="60" autocomplete="off">
+            </section>
+            <section>
+                <h3>Who can play it</h3>
+                <div id="studio-share" class="chips"></div>
+                <p id="studio-share-note" class="studio-note"></p>
             </section>
         </div>
     </section>

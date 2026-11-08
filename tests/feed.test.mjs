@@ -228,10 +228,13 @@ async function inApp({ browser, url, check }) {
                     openInWebView: a => { window.__calls.push(['openInWebView', a]); return Promise.resolve(); },
                     openInExternalBrowser: a => { window.__calls.push(['openInExternalBrowser', a]); return Promise.resolve(); }
                 },
-                App: { addListener: () => Promise.resolve({ remove() {} }), minimizeApp: () => {} }
+                App: { addListener: () => Promise.resolve({ remove() {} }), minimizeApp: () => {} },
+                Share: { share: a => { window.__calls.push(['share', a]); return Promise.resolve({}); } }
             }
         };
     });
+    const maker = ctx.cloud.person('maker', 'Maker');
+    const shared = ctx.cloud.studioGame(maker, 'Shared Merge', { spec: 1, mechanic: { key: 'drop-merge', version: '1.0.0' }, params: {}, theme: { pack: 'farm' } });
     const page = await ctx.newPage();
     const popups = [];
     ctx.on('page', p => popups.push(p.url()));
@@ -252,5 +255,11 @@ async function inApp({ browser, url, check }) {
     await page.click('.slide.active .rail button[aria-label="Open in the browser"]'); await wait(300);
     calls = await page.evaluate(() => window.__calls);
     check(calls[1] && calls[1][0] === 'openInExternalBrowser' && calls[1][1].url === GEMINI, 'App: the arrow button still offers the phone browser');
+    await page.evaluate(() => [...document.querySelectorAll('.slide')].find(s => s.querySelector('h2')?.textContent === 'Shared Merge').scrollIntoView());
+    await wait(900);
+    await page.click('.slide.active .rail button[aria-label="Share"]'); await wait(300);
+    calls = await page.evaluate(() => window.__calls);
+    check(calls[2] && calls[2][0] === 'share' && calls[2][1].url === `https://sinadehesh.github.io/pukytoon/?g=${shared.slug}`,
+          'App: Share opens the phone’s share sheet, with the website’s link to the game');
     await ctx.close();
 }

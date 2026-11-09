@@ -23,6 +23,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- The link in a sign-in email opens the app, signed in (APP_LINK in js/cloud.js) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.sinadehesh.pukytoon" android:host="login" />
+            </intent-filter>
+
         </activity>
 
         <provider

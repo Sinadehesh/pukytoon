@@ -20,6 +20,7 @@ export async function fakeCloud(context) {
         likes: [],      // { user_id, game_id }
         reports: [],    // { game_id, reporter_id, reason, details }
         codes: {},      // email -> the code "emailed"
+        redirects: {},  // email -> where the emailed link sends them back to (the website, or the app's own address)
         calls: [],      // "METHOD /path" of every request
         down: false,    // true: every request fails like a dropped connection
         latency: 150,   // ms before each answer, as over a phone's connection (races show up)
@@ -44,6 +45,12 @@ export async function fakeCloud(context) {
             this.games.push(g);
             return g;
         }
+    };
+
+    // What a sign-in email's link brings back, after the address it was sent to (#access_token=…&refresh_token=…)
+    db.linkFor = email => {
+        const s = session(db.accounts[email]);
+        return `access_token=${s.access_token}&expires_at=${s.expires_at}&expires_in=3600&refresh_token=${s.refresh_token}&token_type=bearer&type=magiclink`;
     };
 
     function session(account) {
@@ -94,7 +101,8 @@ export async function fakeCloud(context) {
 
         // --- Sign-in ---
         if (path === '/auth/v1/otp' && method === 'POST') {
-            db.codes[body.email] = '424242';
+            db.codes[body.email] = '42424242';
+            db.redirects[body.email] = params.get('redirect_to');
             if (!db.accounts[body.email]) db.accounts[body.email] = { id: uuid(), email: body.email, fresh: true };
             return { status: 200, body: {} };
         }

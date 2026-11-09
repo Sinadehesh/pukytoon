@@ -237,6 +237,22 @@ export async function run({ browser, url, check }) {
     check(!errors.length, `No page errors${errors.length ? ': ' + errors[0] : ''}`);
     await ctx.close();
 
+    // On the website, the email's link comes back to the page it was sent from, signed in
+    const web = await phone(browser, url, db => { db.person('webby', 'Webby'); });
+    await web.page.click('#btn-account');
+    await web.page.fill('#acct-email-input', 'webby@test.invalid');
+    await web.page.click('#acct-email button[type=submit]');
+    await web.page.waitForSelector('#acct-code:not([hidden])');
+    const back = web.db.redirects['webby@test.invalid'];
+    check(back === url, `The website's sign-in link comes back to the website (${back})`);
+    const opened = await web.ctx.newPage();   // a link from an email arrives as a fresh page load
+    opened.on('pageerror', e => web.errors.push(e.message));
+    await opened.goto(`${back}#${web.db.linkFor('webby@test.invalid')}`);
+    check(await until(async () => (await opened.textContent('#btn-account')) === 'W') && !(await opened.evaluate(() => location.hash)),
+          'Opening it signs in, and the address forgets the link’s tokens');
+    check(!web.errors.length, `No page errors on the website link${web.errors.length ? ': ' + web.errors[0] : ''}`);
+    await web.ctx.close();
+
     // No connection: the phone's games, and a clear message when signing in
     const off = await phone(browser, url, db => { db.down = true; });
     await until(async () => (await titles(off.page)).length >= 2);

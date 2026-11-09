@@ -9,7 +9,7 @@ videos.
 - **Tap +** (or swipe to the end of the feed) to add a game: drop its **share link** or paste its **code**.
   Pukytoon works out which one it is, and what kind of code.
 - **Tap ✦ Create** to make a game in the **Creator Studio**, no code needed.
-- **Tap ☺** to sign in with your email (no password: a code each time), then **share** your games with everyone,
+- **Tap ☺** to sign in with your email (no password: a link each time), then **share** your games with everyone,
   **like** theirs, and report anything that shouldn't be there.
 
 The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge):
@@ -76,8 +76,10 @@ Everything you add or make is saved on the phone (the app's own storage). Sharin
 Pukytoon has accounts and a feed everyone shares, on [Supabase](https://supabase.com) (the project *pukytoon*).
 You can watch and play without one.
 
-- **Signing in**: ☺, your email, then the code it gets. New addresses get an account and pick a name and an
-  @name, which go on the games they share. On the website, the link in the same email also works.
+- **Signing in**: ☺, your email, then tap the link in the email it gets, on the same phone: on the website it
+  opens the website signed in, and from the Android app it opens the app (its own address,
+  `com.sinadehesh.pukytoon://login`). Once the emails carry a code too (setup step 2), typing it works as well. New
+  addresses get an account and pick a name and an @name, which go on the games they share.
 - **What you can share**: Creator Studio games (when you publish, *Who can play it* → *Everyone*, the
   default) and Claude, Gemini and Kimi links (**⤴** on their card). Pasted code games stay on the phone for now:
   sharing those needs the safety checks from the plan first.
@@ -120,15 +122,16 @@ psql -v ON_ERROR_STOP=1 -f supabase/tests/supabase-stub.sql $(for m in supabase/
 When a core mechanic's manifest changes, `node tools/seed-mechanics.mjs > supabase/migrations/<time>_core_mechanics.sql`
 makes the migration that updates the database's copy.
 
-### One-time setup (yours to do)
+### One-time setup
 
-These live in dashboards only you can reach.
-
-1. **Supabase → Authentication → URL Configuration**
-   - *Site URL*: `https://pukytoon.sinadehesh.com` (until step 4 is done: `https://sinadehesh.github.io/pukytoon/`)
-   - *Redirect URLs*: add `https://pukytoon.sinadehesh.com/**` and `https://sinadehesh.github.io/pukytoon/**`
-2. **Supabase → Authentication → Emails → Templates**: in *Magic link* and in *Confirm signup*, put the code in the
-   email (the app signs in with it, and the website can use the link):
+1. **Supabase → Authentication → URL Configuration** (done, through the Management API):
+   - *Site URL*: `https://sinadehesh.github.io/pukytoon/` (it forwards to pukytoon.sinadehesh.com once step 4 is done)
+   - *Redirect URLs*: `https://sinadehesh.github.io/pukytoon/`, `https://pukytoon.sinadehesh.com/` (each also with
+     `**`), and the app's own address `com.sinadehesh.pukytoon://login`
+2. **The code in the emails** (waits for step 3: on the free plan, Supabase lets you change its emails only once
+   they go out through your own sender; until then they carry just the link, which is enough to sign in).
+   *Supabase → Authentication → Emails → Templates*: in *Magic link* and in *Confirm signup*, put the code in the
+   email (it's 8 digits on this project):
    ```html
    <h2>Your Pukytoon code</h2>
    <p>Type this code in Pukytoon to sign in:</p>
@@ -149,6 +152,8 @@ These live in dashboards only you can reach.
    - *GitHub → Sinadehesh/pukytoon → Settings → Pages → Custom domain*: `pukytoon.sinadehesh.com`, Save, wait for
      the DNS check, then tick *Enforce HTTPS*. The old address forwards to the new one, so links already shared keep
      working.
+
+Steps 3 and 4 are yours: they need accounts and dashboards only you can reach.
 
 Later, when code games can be shared: those will be served from their own domain rather than another
 sinadehesh.com subdomain, since pages on subdomains of one domain count as the same site to browsers (cookies,
@@ -204,9 +209,9 @@ answers like it, a little slowly, as a phone's connection would.
   properly: the runner must clear every obstacle at its easiest and hardest settings, match-3 must always
   have a move that scores, whack-a-mole must be playable without misses.
 - **feed**: swiping, playing, the built-in games, every kind of pasted code, links, saves, likes and removing,
-  and link games as the Android app plays them.
+  and, as the Android app: link games, the share sheet, and the sign-in link opening the app (and an expired one).
 - **studio**: making, tuning, publishing, playing and editing a game, and Back closing the Studio.
-- **cloud**: everyone's games in the feed, signing in with a code (and a wrong one), picking a name, likes,
+- **cloud**: everyone's games in the feed, signing in with a code (and a wrong one) or the email's link, picking a name, likes,
   sharing a Studio game and a Claude link, new versions, share links, reports, remixing, hiding someone, taking a
   game down, signing out and in, renaming, deleting the account, and carrying on offline.
 - **database** (a separate CI job, on Postgres 17): every migration on an empty database, then 81 checks of its

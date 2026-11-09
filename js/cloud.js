@@ -110,12 +110,32 @@ function needAccount() {
     if (!client || !user) throw new CloudError('Sign in first');
 }
 
-// --- Signing in: a code by email (the app types it in), or the link in the same email (the website) ---
+// --- Signing in: the link in an emailed message, or the code in it once the email template has one ---
+
+// Where a sign-in email's link brings people back: the website, or in the Android app the app's own address
+// (AndroidManifest.xml), so the link opens the app signed in. Both are allowed in Supabase's redirect URLs.
+export const APP_LINK = 'com.sinadehesh.pukytoon://login';
 
 export async function sendCode(address) {
     await start();
-    const here = native ? PUBLIC_URL : new URL('.', location.href).href;
-    await run(client.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true, emailRedirectTo: here } }));
+    const back = native ? APP_LINK : new URL('.', location.href).href;
+    await run(client.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true, emailRedirectTo: back } }));
+}
+
+// A sign-in link that opened the app: APP_LINK#access_token=…&refresh_token=…, or #error_description=… when
+// it had expired or was used already. True when it signed someone in; anything else isn't a sign-in link.
+export async function fromLink(url) {
+    if (typeof url !== 'string' || !url.startsWith(APP_LINK)) return false;
+    await start();
+    const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1] || '');
+    if (params.get('error') || params.get('error_description')) {
+        throw new CloudError('That sign-in link has expired or was used already. Ask for a new one.');
+    }
+    const access_token = params.get('access_token'), refresh_token = params.get('refresh_token');
+    if (!access_token || !refresh_token) return false;
+    const data = await run(client.auth.setSession({ access_token, refresh_token }));
+    await setUser(data.user || (data.session && data.session.user) || null);
+    return true;
 }
 
 export async function verifyCode(address, code) {

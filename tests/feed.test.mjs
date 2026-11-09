@@ -228,7 +228,11 @@ async function inApp({ browser, url, check }) {
                     openInWebView: a => { window.__calls.push(['openInWebView', a]); return Promise.resolve(); },
                     openInExternalBrowser: a => { window.__calls.push(['openInExternalBrowser', a]); return Promise.resolve(); }
                 },
-                App: { addListener: () => Promise.resolve({ remove() {} }), minimizeApp: () => {} },
+                App: {
+                    addListener: (name, fn) => { (window.__listeners = window.__listeners || {})[name] = fn; return Promise.resolve({ remove() {} }); },
+                    getLaunchUrl: () => Promise.resolve(undefined),
+                    minimizeApp: () => {}
+                },
                 Share: { share: a => { window.__calls.push(['share', a]); return Promise.resolve({}); } }
             }
         };
@@ -261,5 +265,24 @@ async function inApp({ browser, url, check }) {
     calls = await page.evaluate(() => window.__calls);
     check(calls[2] && calls[2][0] === 'share' && calls[2][1].url === `https://sinadehesh.github.io/pukytoon/?g=${shared.slug}`,
           'App: Share opens the phone’s share sheet, with the website’s link to the game');
+
+    // Signing in: the email's link comes back to the app's own address, and Android opens the app with it
+    const APP_LINK = 'com.sinadehesh.pukytoon://login';
+    await page.click('#btn-account');
+    await page.fill('#acct-email-input', 'app@test.invalid');
+    await page.click('#acct-email button[type=submit]');
+    await page.waitForSelector('#acct-code:not([hidden])');
+    check(ctx.cloud.redirects['app@test.invalid'] === APP_LINK, `App: the sign-in email's link comes back to the app (${ctx.cloud.redirects['app@test.invalid']})`);
+    const tap = link => page.evaluate(url => window.__listeners.appUrlOpen({ url }), link);
+    await tap(`${APP_LINK}#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired`);
+    await wait(300);
+    check((await page.textContent('#toast')).includes('expired'), 'App: an expired link says so');
+    await tap(`${APP_LINK}#${ctx.cloud.linkFor('app@test.invalid')}`);
+    await page.waitForSelector('#acct-name:not([hidden])', { timeout: 5000 }).catch(() => {});
+    check(await page.isVisible('#acct-name'), 'App: tapping the link signs in, and a new account picks a name');
+    await page.fill('#acct-display', 'App Person');
+    await page.click('#acct-name button[type=submit]');
+    await wait(800);
+    check((await page.textContent('#btn-account')) === 'A' && await page.isHidden('#account'), 'App: then it’s done, back to the feed');
     await ctx.close();
 }

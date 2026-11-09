@@ -978,7 +978,22 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); go(active - 1); }
 });
 
+// A sign-in email's link, tapped on this phone, opens the app with the account in it (cloud.APP_LINK)
+async function signInFromLink(url) {
+    try {
+        if (!(await cloud.fromLink(url))) return;
+    } catch (e) {
+        toast(e.message);
+        return;
+    }
+    if (!account.hidden && !$('acct-code').hidden) afterSignIn();   // they were waiting for the email
+    else if (cloud.me()) toast(`Signed in as ${cloud.me().display_name}`);
+    // with no name yet, the account sheet asks for one by itself (cloud.onChange)
+}
+
 if (native && plugins.App) {
+    plugins.App.addListener('appUrlOpen', e => signInFromLink(e && e.url));
+    if (plugins.App.getLaunchUrl) plugins.App.getLaunchUrl().then(r => r && signInFromLink(r.url)).catch(() => {});
     plugins.App.addListener('backButton', () => {
         if (!closeTop()) plugins.App.minimizeApp();
     });

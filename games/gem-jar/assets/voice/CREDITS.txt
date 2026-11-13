@@ -1,0 +1,5 @@
+Narrator voice lines, made with ElevenLabs text to speech and supplied by the game's owner.
+Prepared (trimmed, loudness-matched, soft-limited) with tools/prep_voice.py.
+
+Combo ladder: sweet (combo 3), juicy (5), delicious (7), amazing (10), incredible (15 and every 5 after).
+congratulations: making the biggest item. new_highscore: beating your best. game_over: when the jar fills.

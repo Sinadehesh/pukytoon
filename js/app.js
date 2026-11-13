@@ -8,8 +8,10 @@ import * as cloud from './cloud.js';
 import { openStudio, closeStudio, isOpen as studioOpen } from './studio.js';
 import { encodeSpec } from '../runtime/spec.js';
 
-// Games that come with the app, always near the top of the feed. `src` is a page in games/, or a live
-// address for a game that's published elsewhere (it then needs the internet, and updates by itself).
+// Games that come with the app, always near the top of the feed, and part of it (they work offline).
+// `src` is a page in games/. Gem Jar and Zombie Bomber are made in the Happy-Fruit-merge repository and
+// brought in whole by tools/import-games.py. (`src` can also be a live address for a game published
+// elsewhere: it then needs the internet, updates by itself, and can't be paused from here.)
 const BUILTIN = [{
     id: 'happy-animal-merge',
     kind: 'builtin',
@@ -18,12 +20,19 @@ const BUILTIN = [{
     blurb: 'Drop two of the same animal to merge them. Egg → Chick → … → Unicorn!',
     src: 'games/happy-animal-merge/index.html'
 }, {
+    id: 'gem-jar',
+    kind: 'builtin',
+    source: 'pukytoon',
+    title: 'Gem Jar',
+    blurb: 'Drop gems in the jar and merge two of a kind into a better one. Can you make the diamond before the jar fills up?',
+    src: 'games/gem-jar/index.html'
+}, {
     id: 'zombie-bomber',
     kind: 'builtin',
     source: 'pukytoon',
     title: 'Zombie Bomber',
-    blurb: 'Merge bigger bombs, then drop them on the zombies before they reach your base. 300 levels!',
-    src: 'https://sinadehesh.github.io/Happy-Fruit-merge/bomber/'
+    blurb: 'Merge bigger bombs, then drag them onto the zombies before they reach your base. 300 levels!',
+    src: 'games/zombie-bomber/bomber/index.html'
 }];
 const KEEP_LOADED = 1; // slides on each side of the one on screen that keep their game loaded
 const EMOJIS = ['🎮', '🕹️', '👾', '🎲', '🧩', '🚀', '🐙', '🦄', '🐸', '🍄', '⭐', '🏁', '🎯', '🐉', '🪐', '🍩'];
@@ -369,15 +378,27 @@ function play(i) {
     playing = true;
     document.body.classList.add('playing');
     playTitle.textContent = game.title;
-    history.pushState({ pukytoonPlaying: true }, '');
+    if (backIsHistory) {
+        history.pushState({ pukytoonPlaying: true }, '');
+        playDepth = history.length;
+    }
     startGame(i);
     feed.children[i].querySelector('iframe')?.focus();
 }
 
+// On the website the browser's Back button leaves a game, so playing is an entry in its history. A game that
+// moves between pages of its own adds more after it (those tied in with sdk/pukytoon-embed.js don't, where
+// the browser lets them): leaving steps back over all of them at once, so the history is as it was before
+// Play. Stepping back also takes the game back to the page it was on when Play was pressed.
+// In the app Back is the phone's button (the App plugin, at the end of this file) and the history is left
+// alone, so there a game is still on its own page after a trip to the feed.
+const backIsHistory = !(native && plugins.App);
+let playDepth = 0;   // history.length when play began
+
 function exitPlay() {
     if (!playing) return;
     stopPlaying();
-    if (history.state && history.state.pukytoonPlaying) history.back();
+    if (backIsHistory && history.state && history.state.pukytoonPlaying) history.go(-1 - Math.max(0, history.length - playDepth));
 }
 
 function stopPlaying() {

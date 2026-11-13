@@ -53,6 +53,12 @@ async function feed({ browser, url, check }) {
     const activeIndex = () => page.evaluate(() => Number(document.querySelector('.slide.active')?.dataset.index));
     const activeFrame = async () => (await page.waitForSelector('.slide.active iframe')).contentFrame();
     const playing = () => page.evaluate(() => document.body.classList.contains('playing'));
+    // What the page and the games in it fetch from anywhere else (the stand-in for Supabase aside)
+    const outside = [];
+    page.on('request', r => {
+        const u = r.url();
+        if (!u.startsWith(url) && !/^(data|blob|about):/.test(u) && !u.includes('.supabase.co/')) outside.push(u);
+    });
 
     await page.goto(url);
     const det = await page.evaluate(async () => {
@@ -121,21 +127,74 @@ async function feed({ browser, url, check }) {
     await flickUp(); await wait(1500);
     check(await activeIndex() === 1, 'A short quick flick up moves on one game');
 
-    check((await page.textContent('.slide.active h2')) === 'Zombie Bomber', 'Second slide is Zombie Bomber');
-    const bomber = await activeFrame();
-    check(bomber.url() === 'https://sinadehesh.github.io/Happy-Fruit-merge/bomber/', 'It loads from GitHub Pages');
-    await bomber.waitForFunction(() => typeof state !== 'undefined' && document.querySelector('canvas').width > 0, null, { timeout: 30000 });
-    await wait(1500);
-    check(await bomber.evaluate(() => state) === 'title', 'It waits on its title screen');
-    await page.click('.slide.active .cover');
-    const cv = await (await bomber.$('canvas')).boundingBox();
-    await page.touchscreen.tap(cv.x + cv.width / 2, cv.y + cv.height / 2); await wait(1500);
-    const st = await bomber.evaluate(() => state);
-    check(st === 'merge' || st === 'bomb', `Tapping starts a level (state: ${st})`);
-    await page.click('#btn-back'); await wait(500);
+    // Gem Jar and Zombie Bomber: made elsewhere, brought in whole (tools/import-games.py), and tied to the
+    // feed by sdk/pukytoon-embed.js, which pauses them without changing their code
+    const embed = f => f.evaluate(() => ({ frozen: window.__pukytoonEmbed.frozen, frames: window.__pukytoonEmbed.frames,
+        sound: window.__pukytoonEmbed.sound(), hidden: document.hidden, clock: performance.now() }));
+    const moving = async f => { const a = await embed(f); await wait(600); const b = await embed(f); return { frames: b.frames - a.frames, clock: b.clock - a.clock }; };
+    const frozenNow = f => f.waitForFunction(() => window.__pukytoonEmbed && window.__pukytoonEmbed.frozen, null, { timeout: 20000 }).then(() => true, () => false);
+
+    check((await page.textContent('.slide.active h2')) === 'Gem Jar', 'Second slide is Gem Jar');
+    const gems = await activeFrame();
+    check(gems.url() === `${url}games/gem-jar/index.html`, 'It is part of the app (no internet needed)');
+    check(await frozenNow(gems) && (await embed(gems)).hidden, 'Under the cover it stands still, and reads as a hidden page');
+    await page.screenshot({ path: `${OUT}/feed-gem-jar.png` });
+    await page.click('.slide.active .cover'); await wait(800);
+    let m = await moving(gems);
+    check(!(await embed(gems)).frozen && m.frames > 5 && m.clock > 400, `Play sets it going (${m.frames} frames in 0.6 s)`);
+    const jar = await (await gems.$('#board')).boundingBox();
+    const gemCount = () => gems.evaluate(() => Composite.allBodies(engine.world).filter(b => b.tier !== undefined && !b.isStatic).length);
+    const gemsBefore = await gemCount();
+    for (let k = 0; k < 3; k++) { await page.touchscreen.tap(jar.x + jar.width * (0.3 + 0.2 * k), jar.y + jar.height * 0.4); await wait(900); }
+    const gemsAfter = await gemCount();
+    check(gemsAfter > gemsBefore, `Tapping the jar drops gems (${gemsBefore} -> ${gemsAfter})`);
+    const loud = (await embed(gems)).sound;
+    await page.click('#btn-back'); await wait(700);
+    m = await moving(gems);
+    const paused = await embed(gems);
+    check(paused.frozen && paused.hidden && m.frames === 0 && m.clock === 0, `Back stops it: no frames, and its clock stands still (${m.frames} frames, ${m.clock} ms)`);
+    check(loud > 0 && paused.sound === 0, `...and its sound: ${loud} things playing before, ${paused.sound} after`);
+    check(await gems.evaluate(() => !!localStorage.getItem('gemJar.save.rocks')), 'It saved the game on the way out, as it does when its own page is hidden');
+    await page.click('.slide.active .cover'); await wait(700);
+    m = await moving(gems);
+    check(m.frames > 5 && (await gemCount()) >= gemsAfter && (await embed(gems)).sound === loud, 'Play again carries on where it was, sound and all');
+    // Gem Jar moves between pages of its own (Reverse here; the Daily Challenge, Gem Rush and Gem Mine too)
+    const depth = await page.evaluate(() => history.length);
+    await gems.evaluate(() => document.getElementById('btn-size').click());
+    await page.waitForFunction(() => document.querySelector('.slide.active iframe').contentWindow.location.search.includes('size=reverse'), null, { timeout: 10000 }).catch(() => {});
+    await wait(1200);
+    const reversed = await activeFrame();
+    check(reversed.url().includes('size=reverse') && await page.evaluate(() => history.length) === depth,
+          'Its own page changes add nothing to the Back history');
+    check(await playing() && !(await embed(reversed)).frozen, '...and the new page carries on playing');
+    await page.evaluate(() => history.back()); await wait(700);
+    check(!(await playing()), 'so the browser\'s Back leaves the game for the feed at once');
+    check(await frozenNow(await activeFrame()), '...where it stands still again');
 
     await swipeUp(); await wait(1200);
-    check(await activeIndex() === 2, 'Then the add screen');
+    check(await activeIndex() === 2 && (await page.textContent('.slide.active h2')) === 'Zombie Bomber', 'Third slide is Zombie Bomber');
+    const bomber = await activeFrame();
+    check(bomber.url() === `${url}games/zombie-bomber/bomber/index.html`, 'It is part of the app too');
+    await bomber.waitForFunction(() => typeof state !== 'undefined' && document.querySelector('canvas').width > 0, null, { timeout: 30000 });
+    check(await frozenNow(bomber) && await bomber.evaluate(() => state) === 'title', 'It waits on its title screen, standing still');
+    await page.screenshot({ path: `${OUT}/feed-zombie-bomber.png` });
+    await page.click('.slide.active .cover'); await wait(500);
+    const cv = await (await bomber.$('canvas')).boundingBox();
+    await page.touchscreen.tap(cv.x + cv.width / 2, cv.y + cv.height * 0.72); await wait(1500);
+    const st = await bomber.evaluate(() => state);
+    check(st === 'play', `Tapping starts a level (state: ${st})`);
+    const level = () => bomber.evaluate(() => stateT);
+    const t1 = await level(); await wait(500); const t2 = await level();
+    const boom = (await embed(bomber)).sound;
+    check(t2 > t1 && boom > 0, 'The level runs while it is played, with sound');
+    await page.click('#btn-back'); await wait(700);
+    const t3 = await level(); await wait(700); const t4 = await level();
+    const stopped = await embed(bomber);
+    check(stopped.frozen && t4 === t3 && stopped.sound === 0, 'Back stops the level and its sound: the zombies wait');
+    check(!outside.length, `Neither game fetched anything from outside the app${outside.length ? ': ' + outside[0] : ''}`);
+
+    await swipeUp(); await wait(1200);
+    check(await activeIndex() === 3, 'Then the add screen');
     check(await page.isVisible('.add-slide .studio-cta'), 'which also offers the Creator Studio');
 
     // An HTML game pasted with chat text around it
@@ -145,7 +204,7 @@ async function feed({ browser, url, check }) {
     await page.click('#made-with label:has-text("Gemini")');
     check((await page.getAttribute('#name', 'placeholder')).includes('Tap Counter'), 'Name suggested from <title>');
     await page.click('#btn-save'); await wait(1500);
-    check(await activeIndex() === 2 && (await page.textContent('.slide.active .chip')) === 'Made with Gemini', 'Feed jumps to the new game, chip shows its source');
+    check(await activeIndex() === 3 && (await page.textContent('.slide.active .chip')) === 'Made with Gemini', 'Feed jumps to the new game, chip shows its source');
     let f = await activeFrame();
     await f.waitForSelector('#b');
     await page.click('.slide.active .cover');
@@ -190,6 +249,25 @@ async function feed({ browser, url, check }) {
     const banner = await f.evaluate(() => document.documentElement.innerText);
     check(/hit an error/.test(banner) && /undefinedThing/.test(banner), 'Broken game shows an error banner');
 
+    // A game on someone's website that moves between its own pages, adding each to the Back history
+    await page.click('#btn-add');
+    await page.fill('#drop', `${url}tests/fixtures/pages.html`);
+    await page.fill('#name', 'Two Pages');
+    await page.click('#btn-save'); await wait(1200);
+    f = await activeFrame();
+    await page.click('.slide.active .cover'); await wait(300);
+    const before2 = await page.evaluate(() => history.length);
+    await f.click('#next'); await wait(700);
+    await (await activeFrame()).click('#next'); await wait(700);
+    const pageNow = async () => (await activeFrame()).textContent('#where');
+    check(await pageNow() === 'Level 3' && await page.evaluate(() => history.length) === before2 + 2, 'A website game that changes pages adds them to the history');
+    await page.click('#btn-back'); await wait(900);
+    check(!(await playing()) && await page.evaluate(() => !(history.state && history.state.pukytoonPlaying)) && await pageNow() === 'Level 1',
+          'Leaving steps back over all of them at once: the history is as it was before Play');
+    await page.click('.slide.active .cover'); await wait(300);
+    await page.evaluate(() => history.back()); await wait(600);
+    check(!(await playing()), 'and the next Play and Back work as ever');
+
     // Links
     await page.click('#btn-add');
     await page.fill('#drop', 'https://claude.ai/public/artifacts/0b6c7e7a-1111-2222-3333-444455556666');
@@ -213,7 +291,7 @@ async function feed({ browser, url, check }) {
     check(loaded <= 3, `At most 3 games loaded at once (${loaded})`);
     await page.reload(); await wait(1500);
     const count = await page.evaluate(() => document.querySelectorAll('.slide').length);
-    check(count === 2 + after + 1, `Feed rebuilt after a reload (${count} slides)`);
+    check(count === 3 + after + 1, `Feed rebuilt after a reload (${count} slides)`);
     await ctx.close();
 }
 
@@ -265,6 +343,27 @@ async function inApp({ browser, url, check }) {
     calls = await page.evaluate(() => window.__calls);
     check(calls[2] && calls[2][0] === 'share' && calls[2][1].url === `https://sinadehesh.github.io/pukytoon/?g=${shared.slug}`,
           'App: Share opens the phone’s share sheet, with the website’s link to the game');
+
+    // Gem Jar in the app: a page of its own (Reverse), a trip to the feed with the phone's Back button, and
+    // it is still there, standing still, and carries on with Play
+    await page.evaluate(() => [...document.querySelectorAll('.slide')].find(s => s.querySelector('h2')?.textContent === 'Gem Jar').scrollIntoView());
+    await wait(900);
+    const jarFrame = async () => (await page.waitForSelector('.slide.active iframe')).contentFrame();
+    const still = async () => (await jarFrame()).evaluate(() => window.__pukytoonEmbed.frozen);
+    await (await jarFrame()).waitForFunction(() => window.__pukytoonEmbed && window.__pukytoonEmbed.frozen, null, { timeout: 20000 });
+    const steps = await page.evaluate(() => history.length);
+    await page.click('.slide.active .cover'); await wait(500);
+    await (await jarFrame()).evaluate(() => document.getElementById('btn-size').click());
+    await page.waitForFunction(() => document.querySelector('.slide.active iframe').contentWindow.location.search.includes('size=reverse'), null, { timeout: 10000 }).catch(() => {});
+    await wait(1200);
+    await page.evaluate(() => window.__listeners.backButton());   // the phone's Back button
+    await wait(600);
+    check(!(await page.evaluate(() => document.body.classList.contains('playing'))) && (await jarFrame()).url().includes('size=reverse') && await still() &&
+          await page.evaluate(() => history.length) === steps,
+          'App: the phone\'s Back leaves Gem Jar on the page it was on, standing still (the history is untouched)');
+    await page.click('.slide.active .cover'); await wait(600);
+    check(!(await still()) && (await jarFrame()).url().includes('size=reverse'), 'App: and Play carries on there');
+    await page.click('#btn-back'); await wait(500);
 
     // Signing in: the email's link comes back to the app's own address, and Android opens the app with it
     const APP_LINK = 'com.sinadehesh.pukytoon://login';

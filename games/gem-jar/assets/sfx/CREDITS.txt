@@ -1,0 +1,8 @@
+Sound effects (all CC0 / public domain, free for any use; credit not required):
+- drop, land, chime, praise, fanfare, gameover, tap: "Interface Sounds" by Kenney (www.kenney.nl)
+- voice_new_highscore, voice_game_over, voice_congratulations: "Voiceover Pack" (male voice) by Kenney (www.kenney.nl) (no longer played: the narrator in assets/voice replaced them)
+- pop_1..6: "Pop sounds" on OpenGameArt.org (opengameart.org/content/pop-sounds), CC0
+- bubble_1..3, bubble_big: "Pop sounds" on OpenGameArt.org (opengameart.org/content/pop-sounds-0), CC0
+- crate_break_1, crate_break_2, crate_bits, crate_hit (Gem Mine crates): "75 CC0 breaking / falling / hit sfx" by rubberduck on OpenGameArt.org
+  (opengameart.org/content/75-cc0-breaking-falling-hit-sfx), CC0: bfh1_wood_breaking_03, _04, bfh1_wood_falling_02, bfh1_wood_hit_03
+Files are trimmed and volume-levelled with tools/prep_sound.py.

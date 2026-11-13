@@ -12,13 +12,22 @@ videos.
 - **Tap ☺** to sign in with your email (no password: a link each time), then **share** your games with everyone,
   **like** theirs, and report anything that shouldn't be there.
 
-The feed starts with two games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge):
+The feed starts with three games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge), all
+part of the app, so they work offline:
 
-- **Happy Animal Merge** (Egg → Chick → … → Unicorn), its Animals mode with its sprites and hitboxes, built into
-  the app (works offline).
-- **Zombie Bomber** (merge bombs, drop them on the zombies, 300 levels), loaded live from
-  [its GitHub Pages address](https://sinadehesh.github.io/Happy-Fruit-merge/bomber/), so whatever you push to
-  Happy-Fruit-merge shows up in Pukytoon without a new app build. It needs the internet.
+- **Happy Animal Merge** (Egg → Chick → … → Unicorn), its Animals mode with its sprites and hitboxes.
+- **Gem Jar** (drop gems, merge two of a kind, make the diamond): the whole game, with its 11 gem sets, Daily
+  Challenge, Gem Rush, quests, levels and the Gem Mine.
+- **Zombie Bomber** (merge bombs, drag them onto the zombies, 300 levels): the whole game, with its shop.
+
+Gem Jar and Zombie Bomber are the games as they are in Happy-Fruit-merge, brought in unchanged (which version:
+`games/<game>/SOURCE.txt`). Inside Pukytoon they show no ads. To take a newer version of either:
+
+```bash
+python3 tools/import-games.py ../Happy-Fruit-merge    # a checkout of the branch with the version you want
+```
+
+It packs each game with the game's own build script, so it needs what those need (Python 3 with Pillow).
 
 ## Creator Studio
 
@@ -208,7 +217,8 @@ answers like it, a little slowly, as a phone's connection would.
   outside the site and draw a screen. The same seed and input must replay the same game. Bots then play it
   properly: the runner must clear every obstacle at its easiest and hardest settings, match-3 must always
   have a move that scores, whack-a-mole must be playable without misses.
-- **feed**: swiping, playing, the built-in games, every kind of pasted code, links, saves, likes and removing,
+- **feed**: swiping, playing, the built-in games (Gem Jar and Zombie Bomber stand still and silent under the
+  cover and after Back, and carry on with Play), every kind of pasted code, links, saves, likes and removing,
   and, as the Android app: link games, the share sheet, and the sign-in link opening the app (and an expired one).
 - **studio**: making, tuning, publishing, playing and editing a game, and Back closing the Studio.
 - **cloud**: everyone's games in the feed, signing in with a code (and a wrong one) or the email's link, picking a name, likes,
@@ -229,15 +239,18 @@ js/store.js                    the saved games, likes, games' saves and hidden p
 js/cloud.js, config.js         the online side: accounts, everyone's games, sharing, likes, reports (Supabase)
 js/vendor/supabase.js          the Supabase client (2.118.0), kept here so the app needs no CDN
 sdk/pukytoon-sdk.js            the game's end of the bridge, loaded into every game
+sdk/pukytoon-embed.js          for games not written for Pukytoon: pauses them in the feed without changing their code
 runtime/runtime.js             what Studio games run on: loop, input, drawing, sound, rules, title and end screens
 runtime/rules.js, spec.js      win/lose rules (a small parser, never eval) and the GameSpec in a link
 runtime/mechanics/             one module per game type, listed in index.js
 studio/play.html, play.js      the page that plays a GameSpec
 assets/library/                the asset library: sprites/, sfx/, music/, sprites.js, packs.js (the looks), CREDITS.md
-games/happy-animal-merge/      the built-in game (Matter.js physics, kept in vendor/ so it works offline)
+games/happy-animal-merge/      a built-in game (Matter.js physics, kept in vendor/ so it works offline)
+games/gem-jar/, zombie-bomber/ built-in games brought in from Happy-Fruit-merge by tools/import-games.py
 tests/                         the tests (npm test), and fake-cloud.mjs, the stand-in for Supabase they use
 tools/build-library.mjs        rebuilds assets/library/sprites.js after adding pictures (npm run library)
 tools/seed-mechanics.mjs       writes the migration that gives the database the core mechanics' manifests
+tools/import-games.py          brings a newer Gem Jar and Zombie Bomber into games/
 supabase/                      the database: migrations/, and tests/ (a stand-in for Supabase's roles, and the checks)
 app/                           the Android app (Capacitor 8): build-web.mjs, android/
 ```
@@ -253,7 +266,13 @@ app/                           the Android app (Capacitor 8): build-web.mjs, and
   sheet (`@capacitor/share`). `MainActivity` keeps game frames
   inside the feed (Capacitor would otherwise send any non-app page to the phone's browser).
 - To add another built-in game, add it to `BUILTIN` at the top of `js/app.js`, with `src` set to its page in
-  `games/<name>/` (part of the app, works offline) or to the address where it's published (loads live).
+  `games/<name>/` (part of the app, works offline) or to the address where it's published (loads live, but then
+  it can't be paused from the feed).
+- **A game that wasn't written for Pukytoon** needs two script tags before all its other scripts:
+  `sdk/pukytoon-sdk.js` and `sdk/pukytoon-embed.js`. While the feed has it paused, its animation frames wait, its
+  clock (`performance.now`) stands still, its sound is off and its page reads as hidden, so it carries on later
+  exactly where it was; none of its own code changes. `tools/import-games.py` adds the two tags to Gem Jar and
+  Zombie Bomber.
 
 ### Adding a mechanic or art
 

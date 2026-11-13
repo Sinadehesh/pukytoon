@@ -1,0 +1,7 @@
+Zombie Bomber, brought in by tools/import-games.py. Don't edit it here: change the game in its own
+repository and import it again.
+
+From:    https://github.com/Sinadehesh/Happy-Fruit-merge
+Version: 64c0b23ef5e3affe23042a123431839a69cce631
+         2026-11-08  Zombie Bomber: ads, a $4.99 No Ads purchase, and the Android app
+Page:    bomber/index.html

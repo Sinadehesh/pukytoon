@@ -64,9 +64,9 @@ export async function run({ browser, url, check }) {
     });
 
     // Everyone's games, after the built-in ones
-    await until(async () => (await titles(page)).length >= 5);
+    await until(async () => (await titles(page)).length >= 6);
     const t = await titles(page);
-    check(t.slice(2).join(' | ') === 'Bob’s Candy Swap | Moon Jumper | Cara Dash', `Everyone's games follow the built-in ones, newest first (${t.join(', ')})`);
+    check(t.slice(3).join(' | ') === 'Bob’s Candy Swap | Moon Jumper | Cara Dash', `Everyone's games follow the built-in ones, newest first (${t.join(', ')})`);
     await goTo(page, 'Bob’s Candy Swap');
     check((await page.textContent('.slide.active .by')) === 'by Bob · @bob' && (await page.textContent('.slide.active .rail .count')) === '0',
           'A shared game says who made it, and how many like it');
@@ -255,9 +255,9 @@ export async function run({ browser, url, check }) {
 
     // No connection: the phone's games, and a clear message when signing in
     const off = await phone(browser, url, db => { db.down = true; });
-    await until(async () => (await titles(off.page)).length >= 2);
+    await until(async () => (await titles(off.page)).length >= 3);
     await wait(800);
-    check((await titles(off.page)).join(' | ') === 'Happy Animal Merge | Zombie Bomber', 'With no connection the feed still has the games on the phone');
+    check((await titles(off.page)).join(' | ') === 'Happy Animal Merge | Gem Jar | Zombie Bomber', 'With no connection the feed still has the games on the phone');
     await off.page.click('#btn-account');
     await off.page.fill('#acct-email-input', 'x@test.invalid');
     await off.page.click('#acct-email button[type=submit]');

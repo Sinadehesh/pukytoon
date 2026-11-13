@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- For the tests: a game on someone's website that moves between pages of its own (no Pukytoon scripts) -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Two Pages</title>
+    <style>body { margin: 0; background: #223; color: #fff; font: 20px system-ui; text-align: center; padding-top: 40vh; } a { color: #9cf; }</style>
+</head>
+<body>
+    <p id="where"></p>
+    <a id="next" href="?level=2">Next level</a>
+    <script>
+        var level = new URLSearchParams(location.search).get('level') || '1';
+        document.getElementById('where').textContent = 'Level ' + level;
+        document.getElementById('next').href = '?level=' + (Number(level) + 1);
+    </script>
+</body>
+</html>

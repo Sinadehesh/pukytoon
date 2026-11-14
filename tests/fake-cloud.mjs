@@ -12,12 +12,16 @@ const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 let ids = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`;
 
-export async function fakeCloud(context) {
-    const db = {
+// `shared`: another context's db, so two phones (two contexts) use one cloud
+export async function fakeCloud(context, shared) {
+    const db = shared || {
         users: [],      // profiles: { id, handle, display_name }
         accounts: {},   // email -> { id, email }
         games: [],      // { id, slug, title, description, source, source_url, made_with, owner_id, likes_count, published_at, visibility, status, spec }
         likes: [],      // { user_id, game_id }
+        saved: [],      // saved for later: { user_id, game_id, created_at }
+        follows: [],    // { follower_id, followee_id, created_at }
+        saves: [],      // games' saves kept online: { user_id, game_id, data, updated_at }
         reports: [],    // { game_id, reporter_id, reason, details }
         codes: {},      // email -> the code "emailed"
         redirects: {},  // email -> where the emailed link sends them back to (the website, or the app's own address)
@@ -71,7 +75,7 @@ export async function fakeCloud(context) {
         try { return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).sub; } catch (e) { return null; }
     }
 
-    // Filters PostgREST style: column=eq.value, column=lt.value
+    // Filters PostgREST style: column=eq.value, column=lt.value, column=in.(a,b)
     function matches(row, params) {
         for (const [k, v] of params) {
             if (['select', 'order', 'limit', 'on_conflict', 'offset'].includes(k)) continue;
@@ -80,9 +84,15 @@ export async function fakeCloud(context) {
             const have = row[k] == null ? '' : String(row[k]);
             if (op === 'eq' && have !== want) return false;
             if (op === 'lt' && !(have < want)) return false;
+            if (op === 'in' && !want.replace(/^\(|\)$/g, '').split(',').map(s => s.replace(/^"|"$/g, '')).includes(have)) return false;
         }
         return true;
     }
+
+    const visible = (g, me) => !!g && ((g.visibility !== 'private' && g.status === 'published') || g.owner_id === me);
+    const newest = (a, b) => (a.created_at < b.created_at ? 1 : -1);
+    // The database's clock, always moving on (two saves in one millisecond still get different stamps)
+    const stamp = () => new Date(db.lastStamp = Math.max(Date.now(), (db.lastStamp || 0) + 1)).toISOString();
 
     const asRow = g => {
         const owner = db.users.find(u => u.id === g.owner_id);
@@ -154,21 +164,68 @@ export async function fakeCloud(context) {
                 return { status: 200, body: gone.map(g => ({ id: g.id })) };
             }
         }
+        // Likes ('favorite', counted on the game) and games saved for later ('saved'): each person sees only theirs
         if (path === '/rest/v1/user_libraries') {
             if (!me) return err(401, '42501', 'permission denied for table user_libraries');
-            if (method === 'GET') return { status: 200, body: db.likes.filter(l => l.user_id === me).map(l => ({ game_id: l.game_id })) };
+            const listOf = name => (name === 'saved' ? 'saved' : 'likes');
+            if (method === 'GET') {
+                let rows = [...db.likes.map(l => ({ ...l, list: 'favorite' })), ...db.saved.map(s => ({ ...s, list: 'saved' }))]
+                    .filter(r => r.user_id === me).filter(r => matches(r, params));
+                if ((params.get('order') || '').startsWith('created_at.desc')) rows.sort(newest);
+                const withGame = (params.get('select') || '').includes('game:games(');
+                return { status: 200, body: rows.map(r => {
+                    const out = { game_id: r.game_id, list: r.list, created_at: r.created_at };
+                    if (withGame) { const g = db.games.find(x => x.id === r.game_id); out.game = visible(g, me) ? asRow(g) : null; }
+                    return out;
+                }) };
+            }
+            const list = method === 'POST' ? body.list : (params.get('list') || '').slice(3);
             const game = db.games.find(g => g.id === (method === 'POST' ? body.game_id : (params.get('game_id') || '').slice(3)));
             if (method === 'POST') {
-                if (db.likes.some(l => l.user_id === me && l.game_id === body.game_id)) return err(409, '23505', 'duplicate key value violates unique constraint "user_libraries_pkey"');
-                db.likes.push({ user_id: me, game_id: body.game_id });
-                if (game) game.likes_count++;
+                if (body.user_id !== me || !visible(game, me)) return err(403, '42501', 'new row violates row-level security policy for table "user_libraries"');
+                if (db[listOf(list)].some(l => l.user_id === me && l.game_id === body.game_id)) return err(409, '23505', 'duplicate key value violates unique constraint "user_libraries_pkey"');
+                db[listOf(list)].push({ user_id: me, game_id: body.game_id, created_at: stamp() });
+                if (list === 'favorite') game.likes_count++;
                 return { status: 201 };
             }
             if (method === 'DELETE') {
-                const before = db.likes.length;
-                db.likes = db.likes.filter(l => !(l.user_id === me && game && l.game_id === game.id));
-                if (game && db.likes.length < before) game.likes_count--;
+                const before = db[listOf(list)].length;
+                db[listOf(list)] = db[listOf(list)].filter(l => !(l.user_id === me && game && l.game_id === game.id));
+                if (list === 'favorite' && game && db.likes.length < before) game.likes_count--;
                 return { status: 204 };
+            }
+        }
+        // Follows: anyone may see who follows whom; you follow (and stop) only as yourself, and not yourself
+        if (path === '/rest/v1/follows') {
+            if (method === 'GET') return { status: 200, body: db.follows.filter(f => matches(f, params)).sort(newest) };
+            if (!me) return err(401, '42501', 'permission denied for table follows');
+            if (method === 'POST') {
+                if (body.follower_id !== me) return err(403, '42501', 'new row violates row-level security policy for table "follows"');
+                if (body.followee_id === me) return err(400, '23514', 'new row for relation "follows" violates check constraint "follows_check"');
+                if (db.follows.some(f => f.follower_id === me && f.followee_id === body.followee_id)) return err(409, '23505', 'duplicate key value violates unique constraint "follows_pkey"');
+                db.follows.push({ follower_id: me, followee_id: body.followee_id, created_at: stamp() });
+                return { status: 201 };
+            }
+            if (method === 'DELETE') {
+                db.follows = db.follows.filter(f => !(f.follower_id === me && matches(f, params)));
+                return { status: 204 };
+            }
+        }
+        // Games' saves, each person's own; written with an upsert, stamped by the database
+        if (path === '/rest/v1/game_saves') {
+            if (!me) return err(401, '42501', 'permission denied for table game_saves');
+            if (method === 'GET') {
+                return { status: 200, body: db.saves.filter(s => s.user_id === me).map(s => ({ game_id: s.game_id, data: s.data, updated_at: s.updated_at })) };
+            }
+            if (method === 'POST') {
+                if (params.get('on_conflict') !== 'user_id,game_id') return err(409, '23505', 'duplicate key value violates unique constraint "game_saves_pkey"');
+                if (body.user_id !== me) return err(403, '42501', 'new row violates row-level security policy for table "game_saves"');
+                if (!db.games.some(g => g.id === body.game_id)) return err(409, '23503', 'insert or update on table "game_saves" violates foreign key constraint "game_saves_game_id_fkey"');
+                if (JSON.stringify(body.data).length > 262144) return err(400, '23514', 'new row for relation "game_saves" violates check constraint "game_saves_data_check"');
+                let row = db.saves.find(s => s.user_id === me && s.game_id === body.game_id);
+                if (!row) db.saves.push(row = { user_id: me, game_id: body.game_id });
+                Object.assign(row, { data: body.data, updated_at: stamp() });
+                return { status: 201, body: (headers.prefer || '').includes('return=representation') ? [{ updated_at: row.updated_at }] : undefined };
             }
         }
         if (path === '/rest/v1/reviews_reports' && method === 'POST') {
@@ -188,6 +245,9 @@ export async function fakeCloud(context) {
                 db.users = db.users.filter(u => u.id !== me);
                 db.games = db.games.filter(g => g.owner_id !== me);
                 db.likes = db.likes.filter(l => l.user_id !== me);
+                db.saved = db.saved.filter(l => l.user_id !== me);
+                db.saves = db.saves.filter(s => s.user_id !== me);
+                db.follows = db.follows.filter(f => f.follower_id !== me && f.followee_id !== me);
                 for (const [email, a] of Object.entries(db.accounts)) if (a.id === me) delete db.accounts[email];
                 return { status: 204 };
             }

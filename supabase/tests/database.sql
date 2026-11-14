@@ -96,6 +96,26 @@ select pg_temp.expect('bob reports it twice', pg_temp.try($$insert into public.r
 select pg_temp.expect('bob files an automatic flag', pg_temp.try($$insert into public.reviews_reports (kind, game_id, reason) select 'auto_flag', id, 'crashes' from public.games where title = 'Moon Jumper'$$), 'ERR%row-level security%');
 select pg_temp.expect('bob reports as alice', pg_temp.try($$insert into public.reviews_reports (kind, game_id, reporter_id, reason) select 'player_report', id, '00000000-0000-0000-0000-00000000000a', 'spam' from public.games where title = 'Moon Jumper'$$), 'ERR%row-level security%');
 select pg_temp.expect('bob reads moderation cases', (select count(*)::text from public.moderation_cases), '0');
+
+-- Saved for later, follows and saves online
+select pg_temp.expect('bob saves Candy Swap for later', pg_temp.try($$insert into public.user_libraries (user_id, game_id, list) select auth.uid(), id, 'saved' from public.games where title = 'Candy Swap!'$$), 'ok');
+select pg_temp.expect('...which isn''t a like', (select likes_count::text from public.games where title = 'Candy Swap!'), '2');
+select pg_temp.expect('bob follows himself', pg_temp.try($$insert into public.follows (follower_id, followee_id) values (auth.uid(), auth.uid())$$), 'ERR%check%');
+select pg_temp.expect('bob has alice follow him', pg_temp.try($$insert into public.follows (follower_id, followee_id) values ('00000000-0000-0000-0000-00000000000a', auth.uid())$$), 'ERR%row-level security%');
+select pg_temp.expect('bob keeps a save, dated 2001', pg_temp.try($$insert into public.game_saves (user_id, game_id, data, updated_at) select auth.uid(), id, '{"best": 120}', '2001-01-01' from public.games where title = 'Candy Swap!'$$), 'ok');
+select pg_temp.expect('...stamped with the database''s clock instead', (select (updated_at > now() - interval '1 minute')::text from public.game_saves), 'true');
+select pg_temp.expect('bob keeps a save for alice', pg_temp.try($$insert into public.game_saves (user_id, game_id, data) select '00000000-0000-0000-0000-00000000000a', id, '{}' from public.games where title = 'Moon Jumper'$$), 'ERR%row-level security%');
+select pg_temp.expect('bob keeps a save over 256 KB', pg_temp.try($$update public.game_saves set data = jsonb_build_object('x', (select string_agg(md5(i::text), '') from generate_series(1, 20000) i))$$), 'ERR%check%');
+reset role;
+alter table public.game_saves disable trigger game_saves_stamp;
+update public.game_saves set updated_at = '2001-01-01';
+alter table public.game_saves enable trigger game_saves_stamp;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+select pg_temp.expect('bob saves again (an upsert, as the app does)', pg_temp.try($$insert into public.game_saves (user_id, game_id, data) select auth.uid(), id, '{"best": 150}' from public.games where title = 'Candy Swap!' on conflict (user_id, game_id) do update set data = excluded.data$$), 'ok');
+select pg_temp.expect('...the new save, with a new stamp', (select data->>'best' || ' ' || (updated_at > '2020-01-01')::text from public.game_saves), '150 true');
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.expect('alice sees neither bob''s saves nor his saved games', (select count(*) from public.game_saves) || '/' || (select count(*) from public.user_libraries where list = 'saved'), '0/0');
 reset role;
 
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');

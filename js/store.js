@@ -36,6 +36,8 @@ export function updateGame(id, changes) {
 export function removeGame(id) {
     write(GAMES_KEY, listGames().filter(g => g.id !== id));
     try { localStorage.removeItem(SAVE_PREFIX + id); } catch (e) {}
+    const sync = syncInfo();
+    if (sync[id]) { delete sync[id]; try { write(SYNC_KEY, sync); } catch (e) {} }
     const liked = likes();
     if (liked.delete(id)) write(LIKES_KEY, [...liked]);
 }
@@ -60,6 +62,19 @@ export function writeSave(id, data) {
         const text = JSON.stringify(data);
         if (text.length <= MAX_SAVE_CHARS) localStorage.setItem(SAVE_PREFIX + id, text);
     } catch (e) {}
+}
+
+// For the saves of games everyone shares, also kept online (js/sync.js), per game:
+// { cloudId, dirty: changed here since it was last sent, seen: the online copy's time when this phone last had it }
+const SYNC_KEY = 'pukytoon.saveSync.v1';
+export function syncInfo() {
+    return read(SYNC_KEY, {});
+}
+
+export function setSyncInfo(id, info) {
+    const all = syncInfo();
+    all[id] = { ...all[id], ...info };
+    try { write(SYNC_KEY, all); } catch (e) {}
 }
 
 // People whose games they don't want to see (their user ids)

@@ -105,6 +105,15 @@ body.playing .rail { display: none; }
     background: linear-gradient(90deg, var(--c1), var(--c2));
 }
 .caption .by { margin-top: 3px; font-size: 13px; font-weight: 700; color: var(--fg); }
+.caption .by-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 3px; }
+.caption .by-line .by { margin-top: 0; }
+.caption .follow {
+    pointer-events: auto; min-height: 30px; padding: 4px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.75); border-radius: 999px; background: rgba(0, 0, 0, 0.35);
+    font-size: 12px; font-weight: 800; text-shadow: none;
+}
+.caption .follow.on { border-color: transparent; background: rgba(255, 255, 255, 0.16); color: var(--muted); }
+.caption .follow:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
 
 .rail {
     position: absolute; right: 10px; bottom: calc(26px + env(safe-area-inset-bottom));
@@ -116,6 +125,9 @@ body.playing .rail { display: none; }
     display: grid; place-items: center;
 }
 .rail button.liked { color: #ff3b6b; }
+.rail button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.rail button.saved { color: #ffd23f; }
+.rail button.saved svg { fill: currentColor; }
 .rail-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .rail .count { font-size: 12px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 
@@ -371,7 +383,8 @@ body.playing .swipe-hint { display: none; }
 .acct-error:empty { display: none; }
 .link-btn.danger, .menu-options button.danger { color: #ff8f8f; }
 .fine .link-btn { display: inline; margin: 0; font-size: 13px; }
-.menu-options { display: grid; gap: 8px; }
+.menu-options { display: grid; gap: 8px; max-height: 56vh; overflow-y: auto; }   /* a long list scrolls */
+.acct-lists { margin-bottom: 10px; }
 .menu-options button { text-align: left; padding: 0 16px; }
 .menu-cancel {
     width: 100%; min-height: 44px; margin-top: 8px; border: 0; border-radius: 14px;

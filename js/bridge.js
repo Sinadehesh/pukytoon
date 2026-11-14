@@ -13,10 +13,11 @@ let watched = null;               // { frame, onUnresponsive, fired }
 
 // persist: false for frames whose saves shouldn't be kept (the Studio's preview).
 // embedded: the game sits under the feed's Play cover, so it needn't ask for a tap to start.
-export function register(frame, gameId, { persist = true, embedded = false, onReady, onError } = {}) {
+// onSave: told of each save once it's kept on the phone (the app also sends shared games' saves online).
+export function register(frame, gameId, { persist = true, embedded = false, onReady, onError, onSave } = {}) {
     if (!frame.contentWindow) return;
     frames.set(frame.contentWindow, {
-        frame, gameId, persist, embedded, onReady, onError,
+        frame, gameId, persist, embedded, onReady, onError, onSave,
         hello: false, ready: false, lastPong: 0, errors: 0, lastError: '',
         second: 0, count: 0
     });
@@ -101,6 +102,7 @@ window.addEventListener('message', (e) => {
         case 'save':
             if (entry.persist && isPlainObject(d.payload) && jsonLength(d.payload) <= MAX_SAVE_CHARS) {
                 store.writeSave(entry.gameId, d.payload);
+                if (entry.onSave) entry.onSave(d.payload);
             }
             break;
         case 'error':

@@ -10,7 +10,8 @@ videos.
   Pukytoon works out which one it is, and what kind of code.
 - **Tap ✦ Create** to make a game in the **Creator Studio**, no code needed.
 - **Tap ☺** to sign in with your email (no password: a link each time), then **share** your games with everyone,
-  **like** theirs, and report anything that shouldn't be there.
+  **like** theirs, **save** them for later, **follow** the people who made them, and report anything that
+  shouldn't be there.
 
 The feed starts with three games from [Happy-Fruit-merge](https://github.com/Sinadehesh/Happy-Fruit-merge), all
 part of the app, so they work offline:
@@ -101,6 +102,14 @@ You can watch and play without one.
 - **Share links**: **⤴** on a shared game hands its link (`…/?g=<name-code>`) to the phone's share sheet. Opening
   one puts that game first in the feed.
 - **Likes** on shared games are counted online (signed in); likes on the phone's own games stay on the phone.
+- **Saved for later**: the bookmark on someone else's game keeps it in your account (☺ → *Saved for later*),
+  private to you; a tap there goes back to it in the feed.
+- **Following**: *+ Follow* beside a maker's name. ☺ → *Following* lists their newest games.
+- **Saves online**: what a shared game keeps (a Studio game's best score, or anything a game stores with
+  `Pukytoon.save`) also goes online while you're signed in, a couple of seconds after the last change, and
+  comes down when you sign in on another phone. The last save wins; one made on the phone and not sent yet
+  (offline, or signed out) is the newest, so it goes up at the next sign-in instead of being replaced
+  (`js/sync.js`).
 - **⋯** on someone else's game: *Make your own version* (a Studio game, opened as a new one of yours), *Copy the
   link*, *Report this game* and *Hide games by …* (only for you). Games that several people report (adding up to
   3) leave the feed until someone looks at them.
@@ -124,8 +133,10 @@ theirs (never a game's status, a like count or a trust score). Games are created
 `publish_studio_game` and `publish_link_game`, which check what's in them: a Studio game is only data (a
 mechanic from the database's list, settings, a look, rules, at most 8 KB) and a link only goes to Claude,
 Gemini or Kimi. `delete_my_account` removes an account and everything it shared. Reports are weighed by the
-reporter's trust and open a moderation case. The tables for the rest of the plan (community mechanics and
-their review, the asset library, follows, cloud saves, test runs) are there too.
+reporter's trust and open a moderation case. Saved-for-later lists and saves are private to each person;
+follows are public, and a person follows only as themselves. The database stamps every save with its own
+clock, so phones can tell a newer one. The tables for the rest of the plan (community mechanics and their
+review, the asset library, test runs) are there too.
 
 **Changing the database**: add a migration file, try it on a local Postgres with the checks, then apply it to
 the project (Supabase dashboard → SQL, the Supabase CLI, or ask Claude):
@@ -239,8 +250,10 @@ answers like it, a little slowly, as a phone's connection would.
 - **studio**: making, tuning, publishing, playing and editing a game, and Back closing the Studio.
 - **cloud**: everyone's games in the feed, signing in with a code (and a wrong one) or the email's link, picking a name, likes,
   sharing a Studio game and a Claude link, new versions, share links, reports, remixing, hiding someone, taking a
-  game down, signing out and in, renaming, deleting the account, and carrying on offline.
-- **database** (a separate CI job, on Postgres 17): every migration on an empty database, then 81 checks of its
+  game down, signing out and in, renaming, deleting the account, and carrying on offline; then saving a game
+  for later and following its maker (and both lists), and a game's save going online and coming down on a
+  second phone (two browser contexts on one stand-in cloud), where a save made signed out goes up later.
+- **database** (a separate CI job, on Postgres 17): every migration on an empty database, then 92 checks of its
   rules as signed-out visitors, players, a developer, a moderator and the test runner meet them.
 
 ## How it's built
@@ -252,7 +265,9 @@ js/runtime.js                  what was dropped (link or code, which kind) and t
 js/bridge.js                   the app's end of the bridge: which frame is which game, saves, the watchdog
 js/studio.js                   the Creator Studio
 js/store.js                    the saved games, likes, games' saves and hidden people (localStorage)
-js/cloud.js, config.js         the online side: accounts, everyone's games, sharing, likes, reports (Supabase)
+js/cloud.js, config.js         the online side: accounts, everyone's games, sharing, likes, saved for later,
+                               follows, saves and reports (Supabase)
+js/sync.js                     shared games' saves, kept online too so they follow the player
 js/vendor/supabase.js          the Supabase client (2.118.0), kept here so the app needs no CDN
 sdk/pukytoon-sdk.js            the game's end of the bridge, loaded into every game
 sdk/pukytoon-embed.js          for games not written for Pukytoon: pauses them in the feed without changing their code

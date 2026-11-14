@@ -17,6 +17,7 @@
     <link rel="modulepreload" href="js/store.js">
     <link rel="modulepreload" href="js/bridge.js">
     <link rel="modulepreload" href="js/cloud.js">
+    <link rel="modulepreload" href="js/sync.js">
     <link rel="modulepreload" href="js/config.js">
     <link rel="modulepreload" href="runtime/spec.js">
 </head>
@@ -103,6 +104,10 @@
             <div id="acct-me" class="acct-step" hidden>
                 <h2 id="acct-me-name"></h2>
                 <p id="acct-me-detail" class="hint"></p>
+                <div class="acct-actions acct-lists">
+                    <button id="acct-saved" type="button">Saved for later</button>
+                    <button id="acct-following" type="button">Following</button>
+                </div>
                 <div class="acct-actions">
                     <button id="acct-rename" type="button">Change my name</button>
                     <button id="acct-signout" type="button">Sign out</button>

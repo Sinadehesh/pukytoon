@@ -1,5 +1,6 @@
-// Pukytoon online (Supabase): accounts, the games everyone shares, likes and reports. All of it is optional:
-// offline, or before anyone signs in, the feed carries on with the games on the phone.
+// Pukytoon online (Supabase): accounts, the games everyone shares, likes, games saved for later, follows,
+// saves and reports. All of it is optional: offline, or before anyone signs in, the feed carries on with
+// the games on the phone.
 // The database decides what each person may do (supabase/migrations/); this only asks.
 import { SUPABASE_URL, SUPABASE_KEY, PUBLIC_URL } from './config.js';
 
@@ -17,6 +18,8 @@ let user = null;          // the signed-in account
 let profile = null;       // their public name { id, handle, display_name }, once they've picked one
 let profileKnown = false; // whether we managed to look it up (false offline)
 let liked = new Set();    // ids of the games they like
+let saved = new Set();    // ...and the ones they saved to play later
+let followed = new Set(); // ids of the people they follow
 let pending = null;       // the account being looked up
 const listeners = new Set();
 
@@ -60,15 +63,21 @@ async function setUser(next) {
     profile = null;
     profileKnown = false;
     liked = new Set();
+    saved = new Set();
+    followed = new Set();
     pending = next ? (async () => {
-        const [p, l] = await Promise.all([
+        const [p, l, f] = await Promise.all([
             client.from('users').select('id, handle, display_name').eq('id', next.id).limit(1),
-            client.from('user_libraries').select('game_id').eq('list', 'favorite').limit(1000)
+            client.from('user_libraries').select('game_id, list').limit(2000),
+            client.from('follows').select('followee_id').eq('follower_id', next.id).limit(1000)
         ]);
         if (!user || user.id !== next.id) return;   // signed out, or someone else, meanwhile
         profile = (p.data && p.data[0]) || null;
         profileKnown = !p.error;
-        liked = new Set((l.data || []).map(r => r.game_id));
+        const lists = l.data || [];
+        liked = new Set(lists.filter(r => r.list === 'favorite').map(r => r.game_id));
+        saved = new Set(lists.filter(r => r.list === 'saved').map(r => r.game_id));
+        followed = new Set((f.data || []).map(r => r.followee_id));
     })().catch(() => {}) : null;
     await pending;
     emit();
@@ -84,6 +93,9 @@ export const needsName = () => !!user && profileKnown && !profile;
 export const email = () => (user && user.email) || '';
 export const userId = () => (user && user.id) || null;
 export const likes = id => liked.has(id);
+export const isSaved = id => saved.has(id);
+export const follows = personId => followed.has(personId);
+export const counts = () => ({ saved: saved.size, following: followed.size });
 
 // --- Errors people can act on ---
 
@@ -227,19 +239,71 @@ export async function unpublish(cloudId) {
     if (!rows.length) throw new CloudError('That game isn’t yours to take down');
 }
 
-export async function setLike(cloudId, on) {
+// A game in, or out of, one of their lists: 'favorite' (a like, counted on the game) or 'saved' (to play later)
+async function setInList(list, set, cloudId, on) {
     needAccount();
     if (on) {
         try {
-            await run(client.from('user_libraries').insert({ user_id: user.id, game_id: cloudId, list: 'favorite' }));
+            await run(client.from('user_libraries').insert({ user_id: user.id, game_id: cloudId, list }));
         } catch (e) {
             if (!/already/.test(e.message) && !/duplicate/.test(e.message)) throw e;
         }
-        liked.add(cloudId);
+        set.add(cloudId);
     } else {
-        await run(client.from('user_libraries').delete().eq('user_id', user.id).eq('game_id', cloudId).eq('list', 'favorite'));
-        liked.delete(cloudId);
+        await run(client.from('user_libraries').delete().eq('user_id', user.id).eq('game_id', cloudId).eq('list', list));
+        set.delete(cloudId);
     }
+}
+
+export const setLike = (cloudId, on) => setInList('favorite', liked, cloudId, on);
+export const setSaved = (cloudId, on) => setInList('saved', saved, cloudId, on);
+
+// The games they saved to play later, the last one saved first (games taken down since drop out)
+export async function savedGames() {
+    needAccount();
+    const rows = await run(client.from('user_libraries').select(`created_at, game:games(${GAME_FIELDS})`)
+        .eq('list', 'saved').order('created_at', { ascending: false }).limit(100));
+    return rows.map(r => r.game && toGame(r.game)).filter(Boolean);
+}
+
+export async function setFollow(personId, on) {
+    needAccount();
+    if (on) {
+        try {
+            await run(client.from('follows').insert({ follower_id: user.id, followee_id: personId }));
+        } catch (e) {
+            if (!/duplicate/.test(e.message)) throw e;
+        }
+        followed.add(personId);
+    } else {
+        await run(client.from('follows').delete().eq('follower_id', user.id).eq('followee_id', personId));
+        followed.delete(personId);
+    }
+}
+
+// The newest games by the people they follow
+export async function followingGames() {
+    needAccount();
+    if (!followed.size) return [];
+    const rows = await run(client.from('games').select(GAME_FIELDS).in('owner_id', [...followed].slice(0, 200))
+        .eq('visibility', 'public').eq('status', 'published').order('published_at', { ascending: false }).limit(PAGE));
+    return rows.map(toGame).filter(Boolean);
+}
+
+// --- Saves online: what games keep through Pukytoon.save, for the games everyone shares, so a player's
+// progress and best scores follow them to another phone. The database stamps each write with its own clock.
+
+export async function cloudSaves() {
+    needAccount();
+    return run(client.from('game_saves').select('game_id, data, updated_at').limit(1000));
+}
+
+// Returns when the database took it (its updated_at)
+export async function putSave(cloudId, data) {
+    needAccount();
+    const rows = await run(client.from('game_saves').upsert({ user_id: user.id, game_id: cloudId, data }, { onConflict: 'user_id,game_id' })
+        .select('updated_at'));
+    return rows[0] ? rows[0].updated_at : null;
 }
 
 export const REPORT_REASONS = [

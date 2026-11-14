@@ -5,6 +5,7 @@ import { SOURCES, FORMAT_NAMES, detectInput, guessTitle, buildDocument } from '.
 import * as store from './store.js';
 import * as bridge from './bridge.js';
 import * as cloud from './cloud.js';
+import * as sync from './sync.js';
 import { encodeSpec } from '../runtime/spec.js';
 
 // The Creator Studio (its game types, pictures and rules) loads once the game on screen has, or when it's
@@ -180,10 +181,24 @@ function caption(game) {
         el('span', 'chip', game.kind === 'builtin' ? 'Pukytoon original' : game.kind === 'studio' ? 'Made in the Studio' : `Made with ${source.name}`),
         el('h2', '', game.title),
         el('p', '', blurb(game)));
-    if (fromEveryone(game)) box.append(el('p', 'by', game.ownerId === cloud.userId() ? 'Shared by you' : `by ${game.by}${game.handle ? ` · @${game.handle}` : ''}`));
-    else if (game.cloudId) box.append(el('p', 'by', 'Shared with everyone'));
+    if (fromEveryone(game) && game.ownerId === cloud.userId()) {
+        box.append(el('p', 'by', 'Shared by you'));
+    } else if (fromEveryone(game)) {
+        const line = el('div', 'by-line');
+        const following = cloud.follows(game.ownerId);
+        const follow = el('button', following ? 'follow on' : 'follow', following ? 'Following' : '+ Follow');
+        follow.type = 'button';
+        follow.setAttribute('aria-pressed', following);
+        follow.addEventListener('click', () => toggleFollow(game));
+        line.append(el('p', 'by', `by ${game.by}${game.handle ? ` · @${game.handle}` : ''}`), follow);
+        box.append(line);
+    } else if (game.cloudId) {
+        box.append(el('p', 'by', 'Shared with everyone'));
+    }
     return box;
 }
+
+const BOOKMARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg>';
 
 function rail(game) {
     const box = el('div', 'rail');
@@ -196,6 +211,16 @@ function rail(game) {
     if (game.likesCount != null) likeItem.append(el('span', 'count', shortNumber(game.likesCount)));
     like.addEventListener('click', () => toggleLike(game));
     box.append(likeItem);
+
+    if (fromEveryone(game) && !isMine(game)) {
+        const on = cloud.isSaved(game.cloudId);
+        const save = railButton('', 'Save for later');
+        save.innerHTML = BOOKMARK;
+        save.classList.toggle('saved', on);
+        save.setAttribute('aria-pressed', on);
+        save.addEventListener('click', () => toggleSaved(game));
+        box.append(save);
+    }
 
     if (game.slug || canShare(game)) {
         const share = railButton('⤴', 'Share');
@@ -346,7 +371,8 @@ function mount(i) {
         else tell(i, 'pause');
     });
     stage.append(frame);
-    bridge.register(frame, game.id, { embedded: true });
+    // A shared game's saves also go online, so they follow the player to another phone (js/sync.js)
+    bridge.register(frame, game.id, { embedded: true, onSave: game.cloudId ? () => sync.saved(game.id, game.cloudId) : null });
 }
 
 function unmount(i) {
@@ -535,6 +561,33 @@ async function toggleLike(game) {
     refreshSlides();
 }
 
+// Saved for later: the list is under the account button. Signing in for it carries on and saves it.
+async function toggleSaved(game) {
+    if (!(await ensureAccount('Sign in to save games and play them later.'))) return;
+    if (game.ownerId === cloud.userId()) return refreshSlides();   // it was theirs all along
+    const on = !cloud.isSaved(game.cloudId);
+    try {
+        await cloud.setSaved(game.cloudId, on);
+        toast(on ? 'Saved for later: find it in your account' : 'Taken out of Saved for later');
+    } catch (e) {
+        toast(e.message);
+    }
+    refreshSlides();
+}
+
+async function toggleFollow(game) {
+    if (!(await ensureAccount(`Sign in to follow ${game.by} and see their new games.`))) return;
+    if (game.ownerId === cloud.userId()) return refreshSlides();
+    const on = !cloud.follows(game.ownerId);
+    try {
+        await cloud.setFollow(game.ownerId, on);
+        toast(on ? `Following ${game.by}` : `Stopped following ${game.by}`);
+    } catch (e) {
+        toast(e.message);
+    }
+    refreshSlides();   // every game of theirs in the feed says so
+}
+
 // Puts one of your games in everyone's feed (or its new version, if it's there already)
 async function shareOnline(game) {
     if (!(await ensureAccount('Sign in to share your game with everyone.'))) {
@@ -667,28 +720,43 @@ function forgetOnline(cloudId) {
     }
 }
 
-// A small sheet of choices; resolves with the value picked, or null
+// A small sheet of choices; resolves with the value picked, or null. `options` can be a promise of them
+// (a list from online): the sheet says Loading… until they come, then `empty` if there are none.
 let menuDone = null;
-function menu(title, text, options) {
+function menu(title, text, options, { empty = '' } = {}) {
     if (menuDone) menuDone();
     return new Promise(resolve => {
+        let open = true;
         const done = value => {
+            open = false;
             $('menu').hidden = true;
             menuDone = null;
             resolve(value);
         };
         menuDone = () => done(null);
+        const say = t => {
+            $('menu-text').textContent = t || '';
+            $('menu-text').hidden = !t;
+        };
+        const fill = list => {
+            say(list.length ? text : empty || text);
+            $('menu-options').replaceChildren(...list.map(o => {
+                const b = el('button', o.danger ? 'danger' : '', o.label);
+                b.type = 'button';
+                b.addEventListener('click', () => done(o.value));
+                return b;
+            }));
+            $('menu-options').firstChild?.focus();
+        };
         $('menu-title').textContent = title;
-        $('menu-text').textContent = text || '';
-        $('menu-text').hidden = !text;
-        $('menu-options').replaceChildren(...options.map(o => {
-            const b = el('button', o.danger ? 'danger' : '', o.label);
-            b.type = 'button';
-            b.addEventListener('click', () => done(o.value));
-            return b;
-        }));
         $('menu').hidden = false;
-        $('menu-options').firstChild?.focus();
+        if (Array.isArray(options)) {
+            fill(options);
+        } else {
+            say('Loading…');
+            $('menu-options').replaceChildren();
+            options.then(list => open && fill(list), e => open && say(e.message));
+        }
     });
 }
 $('menu').querySelectorAll('[data-close]').forEach(n => n.addEventListener('click', () => menuDone && menuDone()));
@@ -705,8 +773,11 @@ function accountStep(step) {
     $('acct-error').textContent = '';
     if (step === 'me') {
         const p = cloud.me();
+        const n = cloud.counts();
         $('acct-me-name').textContent = p.display_name;
         $('acct-me-detail').textContent = `@${p.handle} · ${cloud.email()}`;
+        $('acct-saved').textContent = `Saved for later${n.saved ? ` · ${n.saved}` : ''}`;
+        $('acct-following').textContent = `Following${n.following ? ` · ${n.following}` : ''}`;
     }
     if (step === 'name') {
         const p = cloud.me();
@@ -809,6 +880,31 @@ $('acct-name').addEventListener('submit', e => {
     });
 });
 $('acct-rename').addEventListener('click', () => accountStep('name'));
+
+// Their lists: tap a game to go to it in the feed
+async function pickGame(title, load, empty) {
+    const games = load().then(list => list.filter(g => !store.blocked().has(g.ownerId)));
+    const id = await menu(title, '', games.then(list => list.map(g => ({ label: `${g.title} · by ${g.by}`, value: g.id }))), { empty });
+    const game = id && (await games).find(g => g.id === id);
+    if (!game) return;
+    closeAccount();
+    showGame(game);
+}
+$('acct-saved').addEventListener('click', () => pickGame('Saved for later', cloud.savedGames,
+    'Nothing yet. Tap the bookmark beside a game to keep it here.'));
+$('acct-following').addEventListener('click', () => pickGame('New from people you follow', cloud.followingGames,
+    'Nothing yet. Tap Follow under a game to see its maker’s new ones here.'));
+
+// A game picked from a list: where it is in the feed, or first in it
+function showGame(game) {
+    const i = items.findIndex(g => g.cloudId && g.cloudId === game.cloudId);
+    if (i >= 0) {
+        feed.children[i].scrollIntoView({ block: 'start' });
+        return;
+    }
+    online.first = game;
+    render(game.id);
+}
 $('acct-signout').addEventListener('click', async () => {
     await cloud.signOut();
     closeAccount();
@@ -851,9 +947,29 @@ function updateAccountButton() {
     b.setAttribute('aria-label', p ? `Your account (${p.display_name})` : 'Sign in');
 }
 
+// A game's id on this phone, from its id online: one of yours that you shared, or one from everyone's feed
+function localIdFor(cloudId) {
+    const mine = store.listGames().find(g => g.cloudId === cloudId);
+    return mine ? mine.id : 'c-' + cloudId;
+}
+
+// Games already loaded whose save just came down from online start again with it (not the one being played)
+function reloadWithSaves(changed) {
+    items.forEach((g, i) => {
+        if (changed.includes(g.id) && !(playing && i === active) && feed.children[i]?.querySelector('.stage iframe')) remount(i);
+    });
+}
+
+let syncedFor = null;   // whose online saves this phone has caught up with
 cloud.onChange(() => {
     updateAccountButton();
     refreshSlides();
+    if (cloud.userId() && cloud.userId() !== syncedFor) {
+        syncedFor = cloud.userId();
+        sync.sync(localIdFor).then(reloadWithSaves);
+    } else if (!cloud.userId()) {
+        syncedFor = null;
+    }
     // Signed in from the email's link on the website, with no name yet
     if (cloud.needsName() && account.hidden) openAccount();
     else if (!account.hidden && !$('acct-me').hidden && !cloud.signedIn()) closeAccount();

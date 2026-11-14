@@ -3,6 +3,7 @@
 // link, share links, reports, remixing, hiding someone, taking a game down, signing out, deleting the
 // account, and carrying on with no connection.
 import { devices, wait, OUT } from './helpers.mjs';
+import { fakeCloud } from './fake-cloud.mjs';
 
 const spec = (key, pack, title) => ({ spec: 1, mechanic: { key, version: '1.0.0' }, params: {}, theme: { pack }, meta: { title } });
 
@@ -264,4 +265,118 @@ export async function run({ browser, url, check }) {
     check(await until(async () => (await off.page.textContent('#acct-error')).includes('No connection')), 'Signing in offline says there’s no connection');
     check(!off.errors.length, `No page errors offline${off.errors.length ? ': ' + off.errors[0] : ''}`);
     await off.ctx.close();
+
+    await savedFollowsAndSaves({ browser, url, check });
+}
+
+// Saving a game for later, following its maker, both lists in the account, and a game's saves following
+// its player to a second phone
+async function savedFollowsAndSaves({ browser, url, check }) {
+    let snake, whack;
+    const one = await phone(browser, url, db => {
+        const ann = db.person('ann', 'Ann');
+        db.person('sam', 'Sam');
+        snake = db.studioGame(ann, 'Ann’s Snake', spec('snake', 'farm', 'Ann’s Snake'), 30);
+        whack = db.studioGame(ann, 'Ann’s Whack', spec('whack-a-mole', 'pets', 'Ann’s Whack'), 5);
+    });
+    const { page, db } = one;
+    await until(async () => (await titles(page)).includes('Ann’s Snake'));
+    await goTo(page, 'Ann’s Whack');
+    const save = '.slide.active .rail button[aria-label="Save for later"]';
+    const follow = '.slide.active .caption .follow';
+    check(await page.isVisible(save) && (await page.textContent(follow)) === '+ Follow', 'Someone else’s game has Save for later, and Follow under its maker’s name');
+
+    // Signed out, Save asks you to sign in, then saves it
+    await page.click(save);
+    await page.waitForSelector('#account:not([hidden]) #acct-email:not([hidden])');
+    check((await page.textContent('#acct-why')).includes('save games'), 'Save asks you to sign in first, and says why');
+    await signIn(page, db, 'sam@test.invalid');
+    const sam = db.users.find(u => u.handle === 'sam').id;
+    check(await toastSays(page, 'Saved for later') && db.saved.length === 1 && db.saved[0].user_id === sam && db.saved[0].game_id === whack.id &&
+          (await page.getAttribute(save, 'aria-pressed')) === 'true' && whack.likes_count === 0,
+          'Once signed in it is saved, online, without counting as a like');
+
+    await page.click(follow);
+    await until(async () => (await page.textContent(follow)) === 'Following');
+    await goTo(page, 'Ann’s Snake');
+    check(db.follows.length === 1 && db.follows[0].follower_id === sam && (await page.textContent(follow)) === 'Following',
+          'Follow follows Ann: all her games say so');
+    await page.screenshot({ path: `${OUT}/cloud-04-follow.png` });
+
+    // The account lists both: a tap goes to the game in the feed
+    await goTo(page, 'Gem Jar');
+    await page.click('#btn-account');
+    await page.waitForSelector('#acct-me:not([hidden])');
+    check((await page.textContent('#acct-saved')) === 'Saved for later · 1' && (await page.textContent('#acct-following')) === 'Following · 1',
+          'Your account counts what you saved and who you follow');
+    await page.click('#acct-saved');
+    await page.waitForSelector('#menu-options button');
+    const savedList = await page.$$eval('#menu-options button', bs => bs.map(b => b.textContent));
+    await page.screenshot({ path: `${OUT}/cloud-05-saved.png` });
+    await page.click('#menu-options button:has-text("Ann’s Whack")');
+    check(savedList.join(' | ') === 'Ann’s Whack · by Ann' && await until(async () => (await activeTitle(page)) === 'Ann’s Whack') && await page.isHidden('#account'),
+          `Saved for later lists it (${savedList.join(', ')}); a tap goes to it`);
+    await page.click('#btn-account');
+    await page.click('#acct-following');
+    await page.waitForSelector('#menu-options button');
+    const followList = await page.$$eval('#menu-options button', bs => bs.map(b => b.textContent));
+    await page.click('#menu-options button:has-text("Ann’s Snake")');
+    check(followList.join(' | ') === 'Ann’s Whack · by Ann | Ann’s Snake · by Ann' && await until(async () => (await activeTitle(page)) === 'Ann’s Snake'),
+          `New from people you follow: Ann’s games, newest first (${followList.join(', ')})`);
+
+    await goTo(page, 'Ann’s Whack');
+    await page.click(save);
+    await until(async () => (await page.getAttribute(save, 'aria-pressed')) === 'false');
+    await page.click('#btn-account');
+    await page.click('#acct-saved');
+    check(await until(async () => (await page.textContent('#menu-text')).includes('Nothing yet')) && db.saved.length === 0,
+          'Tapping it again takes it out; the empty list says how to save one');
+    await page.click('#menu .menu-cancel');
+    await page.click('#account .sheet-backdrop');
+
+    // A game's save goes online (a burst of them once), and comes down on another phone
+    const frame = async () => {
+        const f = await (await page.waitForSelector('.slide.active iframe')).contentFrame();
+        await f.waitForFunction(() => window.__puky && window.__puky.ready, null, { timeout: 15000 });
+        return f;
+    };
+    const g = await frame();
+    await g.evaluate(() => { Pukytoon.save.set('best', 4000); Pukytoon.save.set('best', 4321); });
+    await until(() => db.saves.length === 1, 8000);
+    const calls = db.calls.filter(c => c === 'POST /rest/v1/game_saves').length;
+    check(db.saves.length === 1 && db.saves[0].user_id === sam && db.saves[0].game_id === whack.id && db.saves[0].data.best === 4321 && calls === 1,
+          `A shared game’s save goes online too, once for a burst (${calls} request)`);
+
+    const ctx2 = await browser.newContext({ ...devices['Pixel 7'] });
+    await ctx2.unrouteAll({ behavior: 'ignoreErrors' });
+    await fakeCloud(ctx2, db);   // the same cloud, from another phone
+    const page2 = await ctx2.newPage();
+    const errors2 = [];
+    page2.on('pageerror', e => errors2.push(e.message));
+    await page2.goto(url);
+    await until(async () => (await titles(page2)).includes('Ann’s Whack'));
+    check((await page2.evaluate(id => localStorage.getItem(`pukytoon.save.c-${id}`), whack.id)) === null, 'The other phone has no save of it before signing in');
+    await page2.click('#btn-account');
+    await signIn(page2, db, 'sam@test.invalid');
+    const key = `pukytoon.save.c-${whack.id}`;
+    check(await until(async () => JSON.parse((await page2.evaluate(k => localStorage.getItem(k), key)) || '{}').best === 4321),
+          'Signing in on another phone brings the save down');
+    await goTo(page2, 'Ann’s Whack');
+    const g2 = await (await page2.waitForSelector('.slide.active iframe')).contentFrame();
+    await g2.waitForFunction(() => window.__puky && window.__puky.ready, null, { timeout: 15000 });
+    check((await g2.evaluate(() => Pukytoon.save.get('best'))) === 4321, 'The game there starts with it (best 4321)');
+
+    // Played while signed out, the newer save on this phone goes up when they sign in again
+    await page2.click('#btn-account');
+    await page2.click('#acct-signout');
+    await until(async () => (await page2.textContent('#btn-account')) === '☺');
+    await g2.evaluate(() => Pukytoon.save.set('best', 5000));
+    await wait(2500);
+    const before = db.saves[0].data.best;
+    await page2.click('#btn-account');
+    await signIn(page2, db, 'sam@test.invalid');
+    check(before === 4321 && await until(() => db.saves[0].data.best === 5000, 8000), 'A save made signed out stays on the phone, then goes up at the next sign-in (not replaced by the older one online)');
+    check(!one.errors.length && !errors2.length, `No page errors${one.errors.length || errors2.length ? ': ' + (one.errors[0] || errors2[0]) : ''}`);
+    await ctx2.close();
+    await one.ctx.close();
 }

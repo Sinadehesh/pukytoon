@@ -5,8 +5,18 @@ import { SOURCES, FORMAT_NAMES, detectInput, guessTitle, buildDocument } from '.
 import * as store from './store.js';
 import * as bridge from './bridge.js';
 import * as cloud from './cloud.js';
-import { openStudio, closeStudio, isOpen as studioOpen } from './studio.js';
 import { encodeSpec } from '../runtime/spec.js';
+
+// The Creator Studio (its game types, pictures and rules) loads once the game on screen has, or when it's
+// opened: the feed doesn't need it, and it was a third of the code the first screen waited for
+let studio = null;   // the module, once loaded
+let studioLoading = null;
+function loadStudio() {
+    if (!studioLoading) studioLoading = import('./studio.js').then(m => (studio = m), e => { studioLoading = null; throw e; });
+    return studioLoading;
+}
+const studioOpen = () => !!studio && studio.isOpen();
+const closeStudio = () => studio.closeStudio();
 
 // Games that come with the app, always near the top of the feed, and part of it (they work offline).
 // `src` is a page in games/. Gem Jar and Zombie Bomber are made in the Happy-Fruit-merge repository and
@@ -265,20 +275,46 @@ function addSlide() {
     return s;
 }
 
-// Games near the screen are loaded; the rest are dropped to keep the phone fast. Games run only while
-// they're being played: in the feed they wait, paused, under their Play cover.
+// Games near the screen are loaded; the rest are dropped to keep the phone fast. The game on screen loads
+// first and its neighbours once it has: on a slow connection they would share its bandwidth, and it took
+// four times as long. Games run only while they're being played: in the feed they wait, paused, under
+// their Play cover.
 function setActive(index, again) {
     if (index === active && !again) return;
     active = index;
     [...feed.children].forEach((s, j) => {
         s.classList.toggle('active', j === index);
         if (j >= items.length) return; // the add screen
-        if (Math.abs(j - index) <= KEEP_LOADED) mount(j);
-        else unmount(j);
+        if (j === index) mount(j);
+        else if (Math.abs(j - index) > KEEP_LOADED) unmount(j);
         if (!(again && playing && j === index)) tell(j, 'pause');
+    });
+    afterLoading(index, () => {
+        if (active !== index) return;   // swiped on meanwhile
+        for (let j = index - KEEP_LOADED; j <= index + KEEP_LOADED; j++) {
+            if (j !== index && j >= 0 && j < items.length) mount(j);
+        }
+        loadStudio().catch(() => {});   // ready for a tap on Create
     });
     if (index > 0) feed.querySelector('.swipe-hint')?.remove();
     if (index >= items.length - 4) loadMore();
+}
+
+// Runs `then` once slide i's game has loaded: at once if it has, or has nothing to load (a poster). A
+// game that takes longer than NEIGHBOURS_AFTER lets its neighbours load anyway.
+const NEIGHBOURS_AFTER = 8000;
+function afterLoading(i, then) {
+    const frame = feed.children[i]?.querySelector('.stage iframe');
+    if (!frame || frame.dataset.loaded) return then();
+    let done = false;
+    const go = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        then();
+    };
+    const timer = setTimeout(go, NEIGHBOURS_AFTER);
+    frame.addEventListener('load', go, { once: true });
 }
 
 function mount(i) {
@@ -305,6 +341,7 @@ function mount(i) {
     }
     // Messages sent before a page loads are lost, so tell it again once it has: wait, or play
     frame.addEventListener('load', () => {
+        frame.dataset.loaded = '1';
         if (playing && i === active) startGame(i);
         else tell(i, 'pause');
     });
@@ -866,11 +903,18 @@ async function loadMore() {
 // --- Creator Studio ---
 
 // game: a studio game to edit; remix: start a new game from someone else's
-function openCreate(game, { remix = false } = {}) {
+async function openCreate(game, { remix = false } = {}) {
     if (!sheet.hidden) closeSheet();
+    try {
+        await loadStudio();
+    } catch (e) {
+        toast('The Studio didn’t load. Check the connection and try again.');
+        return;
+    }
+    if (studioOpen()) return;   // tapped twice while it loaded
     const editing = remix ? null : game || null;
     history.pushState({ pukytoonStudio: true }, '');
-    openStudio(remix ? { spec: game.spec, title: `${game.title} remix`.slice(0, 60) } : editing, {
+    studio.openStudio(remix ? { spec: game.spec, title: `${game.title} remix`.slice(0, 60) } : editing, {
         share: editing && !editing.cloudId && isLocal(editing) ? 'me' : 'everyone',
         onClose: () => { if (history.state && history.state.pukytoonStudio) history.back(); },
         onPublish: result => publishFromStudio(result, editing)

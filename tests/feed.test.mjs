@@ -1,7 +1,9 @@
 // The feed, on a Pixel 7-sized screen: swiping, playing, adding games from links and every kind of code,
 // their saves, likes and removing; then link games as the Android app plays them (its native plugins
 // stood in for by recorders).
-import { devices, wait, OUT } from './helpers.mjs';
+import fs from 'fs';
+import path from 'path';
+import { devices, wait, OUT, root } from './helpers.mjs';
 
 const HTML_GAME = "Here's your game!\n```html\n<!DOCTYPE html><html><head><title>Tap Counter</title><style>body{margin:0;display:grid;place-items:center;height:100vh;background:#123;color:#fff;font:24px sans-serif}</style></head>\n<body><button id=\"b\" style=\"font-size:32px;padding:20px\">Tap me</button><div id=\"c\">0</div>\n<script>let n=+localStorage.getItem('taps')||0;c.textContent=n;b.onclick=()=>{n++;localStorage.setItem('taps',n);c.textContent=n;};</script></body></html>\n```\nEnjoy!";
 const REACT_GAME = `import React, { useState } from 'react';
@@ -91,6 +93,36 @@ async function feed({ browser, url, check }) {
     check(det.html === 'code:html' && det.react === 'code:react' && det.jsxNoImport === 'code:react' && det.js === 'code:js' && det.urlInCode === 'code:html',
         'Code formats, and a URL inside code stays code');
     check(det.title1 === 'Snake Game' && det.title2 === 'Space Blaster', 'Titles guessed');
+
+    // How the first screen loads. Its modules are all in index.html's preload list, so they come side by
+    // side instead of one level of imports at a time; the Studio's code isn't among them.
+    const graph = new Set(), todo = ['js/app.js'];
+    while (todo.length) {
+        const f = todo.pop();
+        if (graph.has(f)) continue;
+        graph.add(f);
+        for (const m of fs.readFileSync(path.join(root, f), 'utf8').matchAll(/^import\s[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm)) {
+            todo.push(path.posix.normalize(path.posix.join(path.posix.dirname(f), m[1])));
+        }
+    }
+    const preloaded = [...fs.readFileSync(path.join(root, 'index.html'), 'utf8').matchAll(/rel="modulepreload" href="([^"]+)"/g)].map(m => m[1]);
+    const missing = [...graph].filter(f => !preloaded.includes(f));
+    check(!missing.length && !graph.has('js/studio.js'), `The first screen's ${graph.size} modules are all preloaded, the Studio's not among them${missing.length ? ` (missing: ${missing.join(', ')})` : ''}`);
+    // The game on screen loads first, its neighbours and the Studio after it: held back here by a slow
+    // script, the next game and the Studio's code wait for it
+    const slow = '**/happy-animal-merge/vendor/matter.min.js';
+    await page.route(slow, async r => { await wait(1500); await r.continue(); });
+    const asked = [];
+    const note = r => asked.push(r.url());
+    page.on('request', note);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await wait(600);   // a plain reload waits for every frame
+    const early ={ frames: await page.evaluate(() => document.querySelectorAll('.stage iframe').length), studio: asked.some(u => u.endsWith('/js/studio.js')) };
+    await (await activeFrame()).waitForLoadState('load'); await wait(400);
+    const later = { frames: await page.evaluate(() => document.querySelectorAll('.stage iframe').length), studio: asked.some(u => u.endsWith('/js/studio.js')) };
+    check(early.frames === 1 && later.frames === 2, `The next game loads once the one on screen has (${early.frames}, then ${later.frames} loaded)`);
+    check(!early.studio && later.studio, 'The Studio\'s code loads after the first game too, ready for Create');
+    page.off('request', note);
+    await page.unroute(slow);
 
     await page.evaluate(() => localStorage.clear());
     await page.reload();

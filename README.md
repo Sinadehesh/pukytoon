@@ -276,7 +276,11 @@ app/                           the Android app (Capacitor 8): build-web.mjs, and
   `pause`, `resume`, `mute`, `ping`, and `spec.update` to the Studio's preview. Games run only while they're being
   played; a game that stops answering pings for 6 s gets a *not responding* screen with Reload. The SDK and the
   Happy Animal Merge page show how a game uses it.
-- Only the game on screen and its neighbours are loaded; the rest are dropped to keep the phone fast.
+- Only the game on screen and its neighbours are loaded; the rest are dropped to keep the phone fast. The game
+  on screen loads first, and its neighbours and the Studio's code only once it has (or after 8 s): on a slow
+  4G connection the first game used to share its bandwidth with Gem Jar's 3.6 MB and took 19 s, now 7 s. The
+  modules the first screen needs are all listed in `index.html` as `modulepreload`, so they arrive side by side
+  (the cover shows after 1 s on slow 4G, from 2 s); the feed test fails if one is missing from the list.
 - In the app, link games play in Pukytoon's own full-screen web view (`@capacitor/inappbrowser`, which needs
   Android 8.0 or newer), the back button is handled by `@capacitor/app`, and **⤴** opens the phone's own share
   sheet (`@capacitor/share`). `MainActivity` keeps game frames

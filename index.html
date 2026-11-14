@@ -10,6 +10,15 @@
     <link rel="icon" type="image/png" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="css/pukytoon.css">
+    <!-- Every module the first screen needs, fetched side by side rather than one level of imports at a
+         time (tests/feed.test.mjs checks that the list is complete) -->
+    <link rel="modulepreload" href="js/app.js">
+    <link rel="modulepreload" href="js/runtime.js">
+    <link rel="modulepreload" href="js/store.js">
+    <link rel="modulepreload" href="js/bridge.js">
+    <link rel="modulepreload" href="js/cloud.js">
+    <link rel="modulepreload" href="js/config.js">
+    <link rel="modulepreload" href="runtime/spec.js">
 </head>
 <body>
     <header class="topbar">

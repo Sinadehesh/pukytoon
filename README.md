@@ -39,6 +39,12 @@ Pick a game type and a look, tune it while a live preview plays, and publish it 
 | **Endless runner** | Tap to jump over obstacles and grab treats | Speed, speed-up, gravity, jump height, double jump, spacing, treats, lives |
 | **Match-3** | Swap neighbours to line up three of a kind; chains score more | Kinds of tile, columns, rows, animation speed, hints |
 | **Whack-a-mole** | Tap what pops up, but leave the bad one alone | Holes, time up, how often, bad ones, speed-up |
+| **Snake** | Steer to the food and grow, without hitting a wall, a rock or yourself; swipe, arrow keys, or tap the side to turn to | Board size, speed, speed-up, growth, rocks, through the walls, lives |
+| **Jump up** | Bounce from platform to platform and climb; hold the left or right of the screen to steer, and the sides join up | Gravity, bounce height, side speed, spacing, crumbling and sliding platforms, treats, hazards, lives |
+| **Space shooter** | Drag your ship; it fires by itself. Shoot the enemies, dodge the rocks, catch power-ups for double shots | Fire rate, enemy speed, how often, toughness, rocks, power-ups, speed-up, lives |
+| **Tap clicker** | Tap for coins, buy stronger taps and helpers, and evolve the picture up the look's chain (each doubles everything) | Coins a tap, helper rate, price growth, first evolution's price, golden bonuses |
+| **Memory pairs** | Turn cards two at a time and find the pairs | Pairs (6 to 12), a look at them all first, time to see a miss, shuffle after 3 misses |
+| **Picture quiz** | Questions made from the look's pictures: find it, what comes next in the chain, how many, which one is different | Kinds of question, answers to pick from, seconds per question, lives, streak bonus |
 
 - **Six looks** (Barnyard, Pet Pals, Farm Fresh, Sweet Shop, Gem Mine, Pixel Treasure) from Happy-Fruit-merge's
   art, and any single picture can be swapped for any of the library's 74.
@@ -215,8 +221,18 @@ answers like it, a little slowly, as a phone's connection would.
   at its default settings, at every setting's minimum and maximum, in a dark theme and with every picture
   failing to load; it must boot in under 4 s, never crash, keep every count a number, fetch nothing from
   outside the site and draw a screen. The same seed and input must replay the same game. Bots then play it
-  properly: the runner must clear every obstacle at its easiest and hardest settings, match-3 must always
-  have a move that scores, whack-a-mole must be playable without misses.
+  properly, through the same taps, drags and keys a player has:
+  - the runner clears every obstacle at its easiest and hardest settings; match-3 always has a move that scores;
+    whack-a-mole can be played without misses;
+  - Snake eats 25 before losing a life, on every board (rocks never wall off food);
+  - Jump up climbs 150 m in 60 s without a fall at the hardest and easiest settings (every platform on the way
+    up is reachable);
+  - the shooter survives 60 s at its default settings;
+  - the clicker evolves twice in a minute, and still once in two at the steepest prices;
+  - memory pairs, remembering only cards it has seen, clears 12 pairs in under 2.2 moves a pair;
+  - every quiz question has the right number of different answers and exactly one right one.
+
+  `MECHANIC=snake,quiz node tests/run.mjs mechanics` runs the gate for just those.
 - **feed**: swiping, playing, the built-in games (Gem Jar and Zombie Bomber stand still and silent under the
   cover and after Back, and carry on with Play), every kind of pasted code, links, saves, likes and removing,
   and, as the Android app: link games, the share sheet, and the sign-in link opening the app (and an expired one).
@@ -280,7 +296,9 @@ app/                           the Android app (Capacitor 8): build-web.mjs, and
   music slots by role, the counts its rules can use, rule presets, input actions) and `create(ctx, params)`,
   which returns `start`, `update(dt, input)`, `render(gfx)`, and optionally `onParams`, `serialize` and
   `destroy`. It never loads files or reads raw input: it asks `ctx.slot(name)` for pictures and gets named
-  actions. Add it to `runtime/mechanics/index.js`, then `npm test`: it joins the gate by itself.
+  actions. Add it to `runtime/mechanics/index.js`, then `npm test`: it joins the gate by itself. A setting
+  with fixed choices can name them for the Studio (`'x-labels': { mixed: 'Mixed', … }`). For people to
+  publish it, the database needs its manifest too: `node tools/seed-mechanics.mjs <key>` writes the migration.
 - **Pictures**: put 256×256 PNGs in `assets/library/sprites/<set>/` (a numbered set is a ready-made merge
   chain) and run `npm run library`; give it Happy-Fruit-merge's `shapes.js` to bring their traced hitboxes:
   `node tools/build-library.mjs ../Happy-Fruit-merge/shapes.js`.

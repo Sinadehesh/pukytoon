@@ -18,7 +18,7 @@ export async function run({ browser, url, check }) {
 
     await page.click('#btn-create');
     await page.waitForSelector('#studio:not([hidden])');
-    check((await page.$$('#studio-mechanics .card')).length === 4 && (await page.$$('#studio-themes .card')).length === 6, 'Studio offers 4 mechanics and 6 themes');
+    check((await page.$$('#studio-mechanics .card')).length === 10 && (await page.$$('#studio-themes .card')).length === 6, 'Studio offers 10 mechanics and 6 themes');
     let f = await preview(); await ready(f);
     check((await f.evaluate(() => window.__puky.manifest.key)) === 'drop-merge', 'The preview starts with Drop and merge');
     await page.screenshot({ path: `${OUT}/studio-01.png` });
@@ -85,6 +85,18 @@ export async function run({ browser, url, check }) {
     await page.click('#studio-publish'); await wait(1200);
     check((await page.textContent('.slide.active h2')) === 'Gummy Fox Sprint' &&
           await page.evaluate(() => JSON.parse(localStorage.getItem('pukytoon.games.v1')).length) === 1, 'Saving updates the same game');
+
+    // A game type whose choices have names: the quiz's kinds of question
+    await page.click('#btn-create'); await page.waitForSelector('#studio:not([hidden])'); await wait(300);
+    await page.click('#studio-mechanics .card:has-text("Picture quiz")'); await wait(600);
+    const kinds = await page.locator('#studio-params .chip').allTextContents();
+    check(['Mixed', 'Find it', 'What comes next', 'Counting', 'Odd one out'].every(k => kinds.includes(k)), `Named choices show by name (${kinds.slice(0, 5).join(', ')})`);
+    await page.click('#studio-params .chip:has-text("Counting")'); await wait(900);
+    f = await preview(); await ready(f);
+    check((await f.evaluate(() => window.__puky.params().kinds)) === 'count' && (await f.evaluate(() => window.__puky.manifest.key)) === 'quiz',
+          'Picking one reaches the preview (the quiz, counting)');
+    await page.screenshot({ path: `${OUT}/studio-04-quiz.png` });
+    await page.evaluate(() => history.back()); await wait(600);
 
     await page.click('#btn-create'); await page.waitForSelector('#studio:not([hidden])'); await wait(300);
     await page.click('#studio-themes .card:has-text("Gem Mine")'); await wait(600);

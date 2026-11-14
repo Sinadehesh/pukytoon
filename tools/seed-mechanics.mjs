@@ -8,7 +8,9 @@ const q = s => `'${String(s).replace(/'/g, "''")}'`;
 const out = ['-- The core mechanics and their manifests, written by tools/seed-mechanics.mjs from runtime/mechanics/.',
     '-- Don\'t edit by hand: change the mechanic, then make a new seed.', ''];
 
+const only = process.argv.slice(2);   // keys to write, for a migration that adds mechanics (default: all of them)
 for (const [key, load] of Object.entries(MECHANICS)) {
+    if (only.length && !only.includes(key)) continue;
     const { manifest: m } = await load();
     if (m.key !== key) throw new Error(`${key}: its manifest says ${m.key}`);
     const tag = `$m_${key.replace(/-/g, '_')}$`;

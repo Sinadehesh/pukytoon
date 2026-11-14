@@ -42,10 +42,13 @@ async function feed({ browser, url, check }) {
     const page = await ctx.newPage();
     const cdp = await ctx.newCDPSession(page);
     // Real touch events: Chromium's synthesized scroll gesture does nothing in headless mode
+    // Each touch carries the time it is meant to happen at, as a phone's do: sent one by one, a busy page (a
+    // game next door still starting up) would otherwise stretch a 30 ms flick into a slow drag
     const touchSwipe = async (y0, y1, steps, ms) => {
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 200, y: y0 }] });
-        for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y: y0 + (y1 - y0) * i / steps }] }); await wait(ms); }
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        const t0 = Date.now() / 1000, at = i => t0 + i * ms / 1000;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 200, y: y0 }], timestamp: at(0) });
+        for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y: y0 + (y1 - y0) * i / steps }], timestamp: at(i) }); await wait(ms); }
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: at(steps) });
     };
     const swipeUp = () => touchSwipe(700, 250, 12, 12);
     const flickUp = () => touchSwipe(650, 520, 3, 10);

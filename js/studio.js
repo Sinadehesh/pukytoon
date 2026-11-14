@@ -290,7 +290,8 @@ function renderParams() {
         if (p.enum) {
             const chips = el('div', 'chips');
             p.enum.forEach(v => {
-                const b = choice(el('button', 'chip', String(v)), state.params[key] === v);
+                const label = p['x-labels'] && p['x-labels'][v] != null ? p['x-labels'][v] : String(v);   // a manifest may name its choices
+                const b = choice(el('button', 'chip', label), state.params[key] === v);
                 b.addEventListener('click', () => { setParam(key, v, p); renderParams(); });
                 chips.append(b);
             });

@@ -34,7 +34,7 @@ insert into auth.users (id, email) values
 set role anon; select pg_temp.as_user('');
 select pg_temp.expect('signed out: the core mechanics are there',
   (select string_agg(m.key || '@' || v.semver, ',' order by m.key) from public.mechanics m join public.mechanic_versions v on v.id = m.latest_version_id),
-  'drop-merge@1.0.0,endless-runner@1.0.0,match-3@1.0.0,whack-a-mole@1.0.0');
+  'drop-merge@1.0.0,endless-runner@1.0.0,match-3@1.0.0,memory-pairs@1.0.0,platformer@1.0.0,quiz@1.0.0,snake@1.0.0,space-shooter@1.0.0,tap-clicker@1.0.0,whack-a-mole@1.0.0');
 select pg_temp.expect('signed out: reads trust scores', pg_temp.try($$select trust_score from public.users$$), 'ERR%permission denied%');
 select pg_temp.expect('signed out: publishes', pg_temp.try($$select public.publish_studio_game('{"spec":1,"mechanic":{"key":"match-3"}}', 'X')$$), 'ERR%permission denied%');
 select pg_temp.expect('signed out: makes a profile', pg_temp.try($$insert into public.users (id, handle, display_name) values ('00000000-0000-0000-0000-00000000000a', 'alice', 'A')$$), 'ERR%permission denied%');
